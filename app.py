@@ -367,10 +367,11 @@ def survey_page():
     # Post card
     text = str(post.get("text", ""))
     image_url = str(post.get("image_url", "")).strip()
-    has_image = post.get("has_image", "False") == "True" and image_url not in (
-        "",
-        "nan",
-    )
+    has_image = str(post.get("has_image", "")).strip().lower() in (
+        "true",
+        "1",
+        "yes",
+    ) and image_url not in ("", "nan", "none", "")
 
     st.markdown(
         f"""
