@@ -62,7 +62,7 @@ GOOGLE_APPS_SCRIPT_URL = st.secrets["GOOGLE_APPS_SCRIPT_URL"]
 # Optional GET endpoint to read back saved rows for resume.
 # If not set in secrets, resume is silently disabled.
 GOOGLE_SHEET_READ_URL = st.secrets.get("GOOGLE_SHEET_READ_URL", "")
-AUTOSAVE_EVERY = 10
+AUTOSAVE_EVERY = 1
 
 # ── Session state ──────────────────────────────────────────────────────────────
 
