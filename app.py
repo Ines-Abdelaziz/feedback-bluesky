@@ -183,6 +183,7 @@ def append_to_sheet(data, max_retries=3):
         "label": data["label"],
         "reason": data["reason"],
         "time_spent_sec": data["time_spent_sec"],
+        "unsafe_categories": data.get("unsafe_categories", ""),
         "attribution_source": data.get("attribution_source", "text"),
     }
     for attempt in range(max_retries):
@@ -487,6 +488,19 @@ def survey_page():
         key=f"label_{idx}",
     )
 
+    # Unsafe category multiselect (only when Unsafe is chosen)
+    unsafe_labels = []
+    if label == "Unsafe":
+        label_options = [f"{name} — {desc[:60]}…" for name, desc in LABELS.values()]
+        label_options += ["Other"]
+        label_keys = list(LABELS.keys()) + ["Other"]
+        selected_display = st.multiselect(
+            "**Which categories apply?** * (select all that apply)",
+            options=label_options,
+            key=f"unsafe_cats_{idx}",
+        )
+        unsafe_labels = [label_keys[label_options.index(s)] for s in selected_display]
+
     # Attribution source question (always shown; required when image is present)
     if has_image:
         attribution_options = ["Text", "Image", "Both text and image"]
@@ -509,11 +523,14 @@ def survey_page():
     )
 
     attribution_filled = attribution is not None
-    all_filled = label is not None and reason.strip() != "" and attribution_filled
+    cats_filled = label != "Unsafe" or len(unsafe_labels) > 0
+    all_filled = label is not None and reason.strip() != "" and attribution_filled and cats_filled
     if not all_filled:
         missing = []
         if label is None:
             missing.append("Safe/Unsafe selection")
+        if not cats_filled:
+            missing.append("at least one unsafe category")
         if not attribution_filled:
             missing.append("attribution source (text/image)")
         if not reason.strip():
@@ -540,6 +557,7 @@ def survey_page():
                 "post_id": post.get("post_id", ""),
                 "display_num": post.get("display_num", idx + 1),
                 "label": label,
+                "unsafe_categories": ",".join(unsafe_labels) if unsafe_labels else "",
                 "reason": reason.strip(),
                 "time_spent_sec": round(time_spent, 1),
                 "attribution_source": attribution if attribution else "text",
