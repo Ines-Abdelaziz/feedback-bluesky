@@ -98,6 +98,12 @@ div[data-baseweb="tag"] span {
     background-color: #ffffff !important;
     color: #0f172a !important;
 }
+[data-baseweb="select"] div,
+[data-baseweb="select"] span,
+[data-baseweb="select"] input {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+}
 /* Expander */
 [data-testid="stExpander"] { background-color: #ffffff !important; border-color: #e2e8f0 !important; }
 
