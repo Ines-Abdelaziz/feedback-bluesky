@@ -50,13 +50,51 @@ textarea, input { background-color: #ffffff !important; color: #0f172a !importan
     color: #94a3b8 !important;
     -webkit-text-fill-color: #94a3b8 !important;
 }
-/* Multiselect tags */
-div[data-baseweb="tag"] { background-color: #e2e8f0 !important; }
-div[data-baseweb="tag"] span { color: #0f172a !important; background-color: transparent !important; }
-/* Dropdown menu */
-div[data-baseweb="menu"], div[data-baseweb="popover"] { background-color: #ffffff !important; }
-div[data-baseweb="menu"] li { color: #0f172a !important; }
-div[data-baseweb="menu"] li:hover { background-color: #f1f5f9 !important; }
+/* Multiselect — input box */
+[data-testid="stMultiSelect"] > div > div {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+}
+[data-testid="stMultiSelect"] input {
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+}
+/* Multiselect — placeholder */
+[data-testid="stMultiSelect"] [data-baseweb="select"] span {
+    color: #94a3b8 !important;
+    -webkit-text-fill-color: #94a3b8 !important;
+}
+/* Multiselect — tags (selected items) */
+div[data-baseweb="tag"] {
+    background-color: #e2e8f0 !important;
+}
+div[data-baseweb="tag"] span {
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    background-color: transparent !important;
+}
+/* Multiselect — dropdown list */
+[data-baseweb="popover"],
+[data-baseweb="popover"] > div,
+[data-baseweb="menu"],
+[data-baseweb="menu"] > ul {
+    background-color: #ffffff !important;
+}
+[data-baseweb="menu"] li,
+[data-baseweb="menu"] li * {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+}
+[data-baseweb="menu"] li:hover,
+[data-baseweb="menu"] li:hover * {
+    background-color: #f1f5f9 !important;
+}
+/* "Select all" row */
+[data-baseweb="menu"] [role="option"] {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+}
 /* Expander */
 [data-testid="stExpander"] { background-color: #ffffff !important; border-color: #e2e8f0 !important; }
 
