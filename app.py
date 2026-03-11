@@ -32,38 +32,20 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
 /* Force all text dark */
 p, li, span, label, h1, h2, h3, h4 { color: #0f172a !important; }
 
-/* Widget backgrounds */
-[data-testid="stWidgetLabel"] p { color: #0f172a !important; }
-div[data-baseweb="select"] > div,
-div[data-baseweb="input"] > div,
-div[data-baseweb="textarea"] > div,
-div[data-baseweb="base-input"],
-textarea, input {
-    background-color: #ffffff !important;
-    color: #0f172a !important;
-    border-color: #e2e8f0 !important;
-}
-/* Multiselect dropdown and tags */
-div[data-baseweb="select"] span,
-div[data-baseweb="tag"] { color: #0f172a !important; background-color: #e2e8f0 !important; }
-div[data-baseweb="popover"] ul li { background-color: #ffffff !important; color: #0f172a !important; }
-div[data-baseweb="menu"] { background-color: #ffffff !important; }
+/* Force all widget labels and content text dark */
+[data-testid="stWidgetLabel"] * { color: #0f172a !important; }
+[data-testid="stMarkdownContainer"] * { color: #0f172a !important; }
+/* Inputs and textareas */
+textarea, input { background-color: #ffffff !important; color: #0f172a !important; }
+/* Multiselect tags */
+div[data-baseweb="tag"] { background-color: #e2e8f0 !important; }
+div[data-baseweb="tag"] span { color: #0f172a !important; background-color: transparent !important; }
+/* Dropdown menu */
+div[data-baseweb="menu"], div[data-baseweb="popover"] { background-color: #ffffff !important; }
+div[data-baseweb="menu"] li { color: #0f172a !important; }
 div[data-baseweb="menu"] li:hover { background-color: #f1f5f9 !important; }
-/* Radio + checkbox */
-[data-testid="stRadio"] > div,
-[data-testid="stCheckbox"] > label {
-    background-color: transparent !important;
-    color: #0f172a !important;
-}
 /* Expander */
 [data-testid="stExpander"] { background-color: #ffffff !important; border-color: #e2e8f0 !important; }
-[data-testid="stExpander"] summary p { color: #0f172a !important; }
-/* General container overrides */
-div[class*="stTextArea"] textarea,
-div[class*="stTextInput"] input {
-    background-color: #ffffff !important;
-    color: #0f172a !important;
-}
 
 .post-card {
     background: #ffffff !important;
