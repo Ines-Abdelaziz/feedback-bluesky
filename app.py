@@ -73,22 +73,25 @@ div[data-baseweb="tag"] span {
     -webkit-text-fill-color: #0f172a !important;
     background-color: transparent !important;
 }
-/* Multiselect — dropdown list */
+/* ── Multiselect dropdown popup ── */
 [data-baseweb="popover"],
-[data-baseweb="popover"] > div,
+[data-baseweb="popover"] ul,
 [data-baseweb="menu"],
-[data-baseweb="menu"] > ul {
-    background-color: #ffffff !important;
-}
-[data-baseweb="menu"] li,
-[data-baseweb="menu"] li * {
+[data-baseweb="menu"] ul,
+[role="listbox"],
+[role="option"] {
     background-color: #ffffff !important;
     color: #0f172a !important;
-    -webkit-text-fill-color: #0f172a !important;
 }
-[data-baseweb="menu"] li:hover,
-[data-baseweb="menu"] li:hover * {
-    background-color: #f1f5f9 !important;
+[role="option"]:hover,
+[role="option"][aria-selected="true"] {
+    background-color: #eff6ff !important;
+    color: #1e40af !important;
+}
+[data-baseweb="popover"] input {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+}
 }
 /* "Select all" row */
 [data-baseweb="menu"] [role="option"] {
@@ -590,7 +593,12 @@ def survey_page():
 
     attribution_filled = attribution is not None
     cats_filled = label != "Unsafe" or len(unsafe_labels) > 0
-    all_filled = label is not None and reason.strip() != "" and attribution_filled and cats_filled
+    all_filled = (
+        label is not None
+        and reason.strip() != ""
+        and attribution_filled
+        and cats_filled
+    )
     if not all_filled:
         missing = []
         if label is None:
