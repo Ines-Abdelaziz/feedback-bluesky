@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 from PIL import Image
 from io import BytesIO
+import base64
 import time
 import json
 from dotenv import load_dotenv
@@ -51,6 +52,25 @@ p, li, span, label, h1, h2, h3, h4 { color: #0f172a !important; }
 .cat-table td { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; font-size: 13px; vertical-align: top; line-height: 1.6; color: #0f172a !important; background: #ffffff !important; }
 .cat-table tr:nth-child(even) td { background: #f8fafc !important; }
 .cat-label { font-weight: 600; color: #1e293b !important; white-space: nowrap; }
+
+.blurred-image-wrap {
+    position: relative; display: flex; justify-content: center;
+    margin: 8px 0; cursor: pointer;
+}
+.blurred-image-wrap img {
+    max-width: 100%; border-radius: 10px;
+    filter: blur(64px);
+    transition: filter 0.3s ease;
+    user-select: none;
+}
+.blurred-image-wrap:hover img { filter: blur(0px); }
+.blur-hint {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.55); color: #fff; padding: 7px 16px;
+    border-radius: 20px; font-size: 13px; pointer-events: none;
+    transition: opacity 0.3s ease; white-space: nowrap;
+}
+.blurred-image-wrap:hover .blur-hint { opacity: 0; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -65,6 +85,42 @@ GOOGLE_SHEET_READ_URL = st.secrets.get("GOOGLE_SHEET_READ_URL", "")
 AUTOSAVE_EVERY = 1
 
 # ── Session state ──────────────────────────────────────────────────────────────
+
+LABELS = {
+    "S1": (
+        "porn",
+        "Contain pornographic material, including explicit depictions of sexual acts or genitalia intended to elicit sexual arousal, regardless of artistic, humorous, or educational context.",
+    ),
+    "S2": (
+        "sexual",
+        "Contain sexually suggestive or provocative content that does not reach the threshold of pornography, including innuendo, partial nudity in a sexual context, or implied sexual acts.",
+    ),
+    "S3": (
+        "sexual-figurative",
+        "Contain figurative or symbolic sexual content, such as stylized, cartoon, or abstract representations of sexual themes that may not involve real people or explicit realism but convey sexual meaning or intent.",
+    ),
+    "S4": (
+        "self-harm",
+        "Promote self-harm, including graphic images, glorifying discussions, or triggering stories.",
+    ),
+    "S5": (
+        "nudity",
+        "Contain non-sexual nudity, such as depictions of bare bodies or body parts (e.g., genitals, buttocks, female-presenting nipples) presented without an overt sexual context, including artistic, documentary, or casual exposure.",
+    ),
+    "S6": ("intolerant", "Contain discrimination against protected groups."),
+    "S7": (
+        "graphic-media",
+        "Contain graphic or gory media, including depictions of violence, injury, death, or bodily harm, whether real or fictional, when such content may shock, disturb, or cause discomfort.",
+    ),
+    "S8": (
+        "rude",
+        "Contain rude or impolite content, including crude language and disrespectful comments, without constructive purpose.",
+    ),
+    "S9": (
+        "threat",
+        "Promote violence or harm towards others, including threats, incitement, or advocacy of harm.",
+    ),
+}
 
 for k, v in {
     "page": "intro",
@@ -98,8 +154,11 @@ def load_posts(csv_path="data/survey_posts.csv"):
 def shuffle_posts_for_annotator(posts, annotator_name):
     """Shuffle posts using annotator name as seed — reproducible, unique per annotator."""
     import random
+    import hashlib
 
-    seed = sum(ord(c) for c in annotator_name.lower().strip())
+    seed = int(
+        hashlib.sha256(annotator_name.lower().strip().encode()).hexdigest(), 16
+    ) % (2**32)
     rng = random.Random(seed)
     shuffled = posts.copy()
     rng.shuffle(shuffled)
@@ -124,6 +183,7 @@ def append_to_sheet(data, max_retries=3):
         "label": data["label"],
         "reason": data["reason"],
         "time_spent_sec": data["time_spent_sec"],
+        "attribution_source": data.get("attribution_source", "text"),
     }
     for attempt in range(max_retries):
         try:
@@ -238,23 +298,20 @@ a brief written reasoning.
     """
     )
 
-    st.markdown("### Labeling guidelines")
+    st.markdown("### Unsafe content categories")
     st.markdown(
-        """
+        "A post is **Unsafe** if it falls into one or more of the following categories:"
+    )
+
+    rows_html = "".join(
+        f'<tr><td class="cat-label">{name}</td><td>{desc}</td></tr>'
+        for (name, desc) in LABELS.values()
+    )
+    st.markdown(
+        f"""
 <table class="cat-table">
 <tr><th style="width:22%">Category</th><th>Mark as <strong>Unsafe</strong> if the post…</th></tr>
-<tr><td class="cat-label">Violence &amp; Threats</td>
-    <td>Threatens death or serious harm; promotes, glorifies, or incites violence; shares graphic violent content to shock or intimidate.</td></tr>
-<tr><td class="cat-label">Hate Speech</td>
-    <td>Attacks or incites hatred based on protected characteristics (race, ethnicity, religion, gender identity, sexual orientation, disability, etc.). Includes slurs and dehumanizing comparisons.</td></tr>
-<tr><td class="cat-label">Adult Content</td>
-    <td>Explicit sexual content that is non-consensual, involves minors, or is unlabeled.</td></tr>
-<tr><td class="cat-label">Self-Harm</td>
-    <td>Promotes, instructs, or depicts self-harm, suicide, eating disorders, or extreme dieting.</td></tr>
-<tr><td class="cat-label">Harassment</td>
-    <td>Persistently targets or creates malicious content designed to humiliate or degrade individuals.</td></tr>
-<tr><td class="cat-label">Spam &amp; Deception</td>
-    <td>Spam, financial scams, phishing, artificial engagement manipulation, or impersonation.</td></tr>
+{rows_html}
 </table>
     """,
         unsafe_allow_html=True,
@@ -365,14 +422,20 @@ def survey_page():
     st.markdown("---")
 
     # Post card
-    text = str(post.get("text", ""))
+    raw_text = str(post.get("text", "")).strip()
+    text = "" if raw_text.lower() in ("nan", "none", "") else raw_text
     image_url = str(post.get("image_url", "")).strip()
     has_image = str(post.get("has_image", "")).strip().lower() in (
         "true",
         "1",
         "yes",
-    ) and image_url not in ("", "nan", "none", "")
+    ) and image_url not in ("", "nan", "none")
 
+    text_display = (
+        text
+        if text
+        else '<span style="color:#94a3b8;font-style:italic;">(no text)</span>'
+    )
     st.markdown(
         f"""
 <div class="post-card">
@@ -380,7 +443,7 @@ def survey_page():
         <div class="post-avatar"></div>
         <span style="font-size:12px;color:#94a3b8;vertical-align:middle;">@bluesky user</span>
     </div>
-    <div class="post-text">{text}</div>
+    <div class="post-text">{text_display}</div>
 </div>
     """,
         unsafe_allow_html=True,
@@ -389,11 +452,30 @@ def survey_page():
     if has_image:
         img = show_image(image_url)
         if img:
-            _, col, _ = st.columns([1, 3, 1])
-            with col:
-                st.image(img, use_container_width=True)
+            buf = BytesIO()
+            img.save(buf, format="PNG")
+            b64 = base64.b64encode(buf.getvalue()).decode()
+            st.markdown(
+                f"""
+<div class="blurred-image-wrap">
+    <img src="data:image/png;base64,{b64}" alt="post image">
+    <div class="blur-hint">Hover to reveal image</div>
+</div>""",
+                unsafe_allow_html=True,
+            )
         else:
             st.caption("(Image could not be loaded)")
+
+    # Label definitions reference
+    with st.expander("📋 View unsafe category definitions"):
+        rows_html = "".join(
+            f'<tr><td class="cat-label">{name}</td><td style="font-size:12px;">{desc}</td></tr>'
+            for (name, desc) in LABELS.values()
+        )
+        st.markdown(
+            f'<table class="cat-table"><tr><th style="width:28%">Category</th><th>Description</th></tr>{rows_html}</table>',
+            unsafe_allow_html=True,
+        )
 
     st.markdown("---")
 
@@ -404,6 +486,21 @@ def survey_page():
         horizontal=True,
         key=f"label_{idx}",
     )
+
+    # Attribution source question (always shown; required when image is present)
+    if has_image:
+        attribution_options = ["Text", "Image", "Both text and image"]
+    else:
+        attribution_options = ["Text"]
+
+    attribution = st.radio(
+        "**Your Safe/Unsafe judgment is based on:** *",
+        options=attribution_options,
+        index=0 if not has_image else None,
+        horizontal=True,
+        key=f"attribution_{idx}",
+    )
+
     reason = st.text_area(
         "**Briefly explain your reasoning:** *",
         key=f"reason_{idx}",
@@ -411,11 +508,14 @@ def survey_page():
         height=100,
     )
 
-    all_filled = label is not None and reason.strip() != ""
+    attribution_filled = attribution is not None
+    all_filled = label is not None and reason.strip() != "" and attribution_filled
     if not all_filled:
         missing = []
         if label is None:
             missing.append("Safe/Unsafe selection")
+        if not attribution_filled:
+            missing.append("attribution source (text/image)")
         if not reason.strip():
             missing.append("reasoning")
         st.warning(f"Please complete: {', '.join(missing)}")
@@ -442,6 +542,7 @@ def survey_page():
                 "label": label,
                 "reason": reason.strip(),
                 "time_spent_sec": round(time_spent, 1),
+                "attribution_source": attribution if attribution else "text",
             }
         )
 
