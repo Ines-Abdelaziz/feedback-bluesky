@@ -37,6 +37,19 @@ p, li, span, label, h1, h2, h3, h4 { color: #0f172a !important; }
 [data-testid="stMarkdownContainer"] * { color: #0f172a !important; }
 /* Inputs and textareas */
 textarea, input { background-color: #ffffff !important; color: #0f172a !important; }
+[data-testid="stTextInput"] input,
+[data-testid="stTextInput"] input:focus,
+[data-testid="stTextArea"] textarea,
+[data-testid="stTextArea"] textarea:focus {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+}
+[data-testid="stTextInput"] input::placeholder,
+[data-testid="stTextArea"] textarea::placeholder {
+    color: #94a3b8 !important;
+    -webkit-text-fill-color: #94a3b8 !important;
+}
 /* Multiselect tags */
 div[data-baseweb="tag"] { background-color: #e2e8f0 !important; }
 div[data-baseweb="tag"] span { color: #0f172a !important; background-color: transparent !important; }
