@@ -255,7 +255,6 @@ for k, v in {
     "resume_checked":     False,
     "_do_autosave":       False,
     "resumed_from":       None,
-    "_saved_rows_cache":  [],
 }.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -509,13 +508,11 @@ strong language not targeting anyone, fictional violence in art/games, journalis
     name = name.strip()
     name_valid = len(name) >= 2
 
-    if name_valid and not st.session_state.resume_checked:
+    # Always fetch fresh from sheet — no caching
+    saved_rows = []
+    if name_valid:
         with st.spinner("Checking for saved progress..."):
-            rows = fetch_saved_progress(name)
-        st.session_state._saved_rows_cache = rows
-        st.session_state.resume_checked = True
-
-    saved_rows       = st.session_state._saved_rows_cache if name_valid else []
+            saved_rows = fetch_saved_progress(name)
     resume_available = len(saved_rows) > 0
     resume           = False
 
