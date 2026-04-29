@@ -547,8 +547,12 @@ strong language not targeting anyone, fictional violence in art/games, journalis
             done_ids = {r["post_id"] for r in st.session_state.feedback_data}
             st.session_state.saved_post_ids = done_ids
             st.session_state.saved_up_to    = len(done_ids)
+
+            def post_key(p):
+                return p.get("post_id") or p.get("uri") or p.get("cid") or ""
+
             st.session_state.current_idx    = next(
-                (i for i, p in enumerate(posts) if p.get("post_id", "") not in done_ids),
+                (i for i, p in enumerate(posts) if post_key(p) not in done_ids),
                 len(posts),
             )
             st.session_state.resumed_from = len(saved_rows)
@@ -726,7 +730,7 @@ def survey_page():
         time_spent = time.time() - (st.session_state.post_start_time or time.time())
         st.session_state.feedback_data.append({
             "annotator_name":    st.session_state.annotator_name,
-            "post_id":           post.get("post_id", post.get("uri", str(idx))),
+            "post_id":           post.get("post_id") or post.get("uri") or post.get("cid") or str(idx),
             "display_num":       post.get("display_num", idx + 1),
             "label":             label,
             "unsafe_categories": ",".join(unsafe_labels) if unsafe_labels else "",
