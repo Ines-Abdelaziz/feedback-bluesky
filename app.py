@@ -28,17 +28,20 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
 
 /* ── Mobile responsive ── */
 .block-container {
-    padding-top: 1rem !important;
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
+    padding-top: 2rem !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
     background-color: #f8fafc !important;
-    max-width: 100% !important;
+    max-width: 860px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
 }
 @media (max-width: 768px) {
     .block-container {
-        padding-top: 0.5rem !important;
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
+        padding-top: 1rem !important;
+        padding-left: 1.2rem !important;
+        padding-right: 1.2rem !important;
+        max-width: 100% !important;
     }
     /* Bigger touch targets for radio buttons and checkboxes */
     [data-testid="stRadio"] label,
@@ -518,7 +521,7 @@ strong language not targeting anyone, fictional violence in art/games, journalis
 
     if resume_available:
         completed = len(saved_rows)
-        st.info(f"💾 Found saved progress: **{completed}/100 posts** already labeled.")
+        st.info(f"💾 Found saved progress: **{completed}/3,000 posts** already labeled.")
         resume = st.checkbox(f"Resume from post {completed + 1}", value=True)
 
     st.markdown("---")
@@ -569,7 +572,7 @@ def survey_page():
 
     if st.session_state.resumed_from:
         n = st.session_state.resumed_from
-        st.success(f"Resumed from post {n + 1} — posts 1–{n} are already saved.")
+        st.success(f"✅ Resumed — posts 1–{n} are already saved. Continuing from post {n + 1}.")
         st.session_state.resumed_from = None
 
     if st.session_state.get("_do_autosave"):
