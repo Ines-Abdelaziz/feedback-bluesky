@@ -10,7 +10,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 st.set_page_config(
-    page_title="Bluesky Moderation Study", page_icon="🔵", layout="centered"
+    page_title="Bluesky Moderation Study", page_icon="🔵", layout="centered",
+    initial_sidebar_state="collapsed",
 )
 
 # ── Styling ────────────────────────────────────────────────────────────────────
@@ -24,7 +25,67 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
     color: #0f172a !important;
 }
 [class*="css"] { font-family: 'Inter', sans-serif; }
-.block-container { padding-top: 2rem; background-color: #f8fafc !important; }
+
+/* ── Mobile responsive ── */
+.block-container {
+    padding-top: 1rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    background-color: #f8fafc !important;
+    max-width: 100% !important;
+}
+@media (max-width: 768px) {
+    .block-container {
+        padding-top: 0.5rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+    }
+    /* Bigger touch targets for radio buttons and checkboxes */
+    [data-testid="stRadio"] label,
+    [data-testid="stCheckbox"] label {
+        font-size: 16px !important;
+        padding: 10px 0 !important;
+        min-height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+    /* Bigger buttons on mobile */
+    [data-testid="stButton"] button {
+        font-size: 16px !important;
+        min-height: 52px !important;
+        padding: 12px 20px !important;
+    }
+    /* Bigger text areas */
+    [data-testid="stTextArea"] textarea {
+        font-size: 16px !important;  /* prevents iOS zoom on focus */
+        min-height: 100px !important;
+    }
+    [data-testid="stTextInput"] input {
+        font-size: 16px !important;  /* prevents iOS zoom on focus */
+        min-height: 44px !important;
+    }
+    /* Post card full width */
+    .post-card {
+        padding: 14px 14px !important;
+        border-radius: 10px !important;
+    }
+    .post-text { font-size: 15px !important; }
+    /* Full-width images on mobile */
+    .blurred-image-wrap { width: 100% !important; }
+    .blurred-image-wrap img { width: 100% !important; }
+    /* Stack media grid to single column on mobile */
+    .media-grid-cols > div { flex: 1 1 100% !important; min-width: 100% !important; }
+    /* Hide sidebar toggle */
+    [data-testid="collapsedControl"] { display: none !important; }
+    /* Multiselect bigger */
+    [data-testid="stMultiSelect"] { font-size: 16px !important; }
+    /* Category table scrollable */
+    .cat-table { display: block; overflow-x: auto; font-size: 12px !important; }
+    /* Progress label */
+    .progress-label { font-size: 14px !important; }
+    /* Badges */
+    .media-badge { font-size: 12px !important; padding: 3px 10px !important; }
+}
 
 p, li, span, label, h1, h2, h3, h4 { color: #0f172a !important; }
 [data-testid="stWidgetLabel"] * { color: #0f172a !important; }
@@ -395,7 +456,7 @@ def autosave_pending(force: bool = False):
     if failed:
         st.toast(f"⚠️ Autosave failed for {len(failed)} posts. Will retry.", icon="⚠️")
         return False
-    st.toast(f"💾 Progress saved ({len(saved_ids)} posts)", icon="💾")
+    st.toast(f"💾 Progress saved ({len(saved_ids)}/3,000 posts)", icon="💾")
     return True
 
 # ── Pages ──────────────────────────────────────────────────────────────────────
@@ -412,7 +473,7 @@ def intro_page():
     st.markdown("---")
     st.markdown("### About this study")
     st.markdown("""
-You will review **100 Bluesky posts** and label each one as **Safe** or **Unsafe**
+You will review **3,000 Bluesky posts** and label each one as **Safe** or **Unsafe**
 according to Bluesky's Community Guidelines. For each post you must also provide
 a brief written reasoning.
 
@@ -556,6 +617,7 @@ def survey_page():
                 st.caption("(Image could not be loaded)")
         else:
             # Multi-image grid
+            st.markdown('<div class="media-grid-cols" style="display:flex;flex-wrap:wrap;gap:8px;">', unsafe_allow_html=True)
             cols = st.columns(min(len(media["image_urls"]), 2))
             for i, url in enumerate(media["image_urls"]):
                 with cols[i % 2]:
@@ -564,6 +626,7 @@ def survey_page():
                         render_blurred_image(image_to_b64(img), f"Hover to reveal image {i+1}")
                     else:
                         st.caption(f"(Image {i+1} could not be loaded)")
+            st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Video ──────────────────────────────────────────────────────────────────
     if media["has_video"]:
@@ -615,10 +678,12 @@ def survey_page():
         attribution_options.append("Video")
         attribution_options.append("Audio")
 
-    attr_cols = st.columns(len(attribution_options))
+    # On mobile, 2 columns max to avoid cramped layout
+    n_cols = min(len(attribution_options), 2)
+    attr_cols = st.columns(n_cols)
     attribution_checked = {}
     for i, opt in enumerate(attribution_options):
-        with attr_cols[i]:
+        with attr_cols[i % n_cols]:
             attribution_checked[opt] = st.checkbox(opt, key=f"attr_{idx}_{opt}")
 
     selected_attributions = [opt for opt, checked in attribution_checked.items() if checked]
