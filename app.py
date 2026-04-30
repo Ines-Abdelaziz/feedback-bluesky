@@ -252,7 +252,6 @@ for k, v in {
     "saved_up_to":        -1,
     "submission_complete":False,
     "post_start_time":    None,
-    "resume_checked":     False,
     "_do_autosave":       False,
     "resumed_from":       None,
 }.items():
@@ -297,12 +296,100 @@ def load_posts() -> list:
 
 
 def shuffle_posts_for_annotator(posts, annotator_name):
+    """
+    Organise posts into 30 batches of 100, where each batch contains
+    ~33 posts from each source file (ines_1k, sayeh_unlabeled, pilot).
+    Within each batch, posts are shuffled with a fixed seed so ALL
+    annotators see the same 100 posts per batch — just in a different order.
+    The per-annotator seed only affects the within-batch order, not which
+    posts are in the batch.
+
+    This means after every 100 posts, all annotators have labeled the
+    same set, enabling incremental IAA analysis.
+    """
     import random, hashlib
-    seed = int(hashlib.sha256(annotator_name.lower().strip().encode()).hexdigest(), 16) % (2**32)
-    rng  = random.Random(seed)
-    shuffled = posts.copy()
-    rng.shuffle(shuffled)
-    return shuffled
+
+    BATCH_SIZE   = 100
+    SOURCES      = ["ines_1k", "sayeh_unlabeled", "pilot"]
+    PER_SOURCE   = BATCH_SIZE // len(SOURCES)   # 33 each, last gets remainder
+
+    # ── Split posts by source ──────────────────────────────────────────────
+    buckets = {s: [] for s in SOURCES}
+    other   = []
+    for p in posts:
+        # Detect source from the HF URL in images/video, or from a source field
+        src_tag = p.get("source", "")
+        uri     = p.get("uri", "")
+
+        # Try to detect from image/video URL path (images/ines/, images/sayeh_unlabeled/, images/pilot/)
+        media_url = ""
+        imgs = p.get("images") or []
+        if imgs and isinstance(imgs[0], dict):
+            media_url = imgs[0].get("file", "")
+        elif p.get("video"):
+            media_url = p.get("video", "")
+
+        if "images/ines" in media_url or "videos/ines" in media_url or src_tag == "ines_1k":
+            buckets["ines_1k"].append(p)
+        elif "sayeh_unlabeled" in media_url or src_tag == "sayeh_unlabeled":
+            buckets["sayeh_unlabeled"].append(p)
+        elif "pilot" in media_url or src_tag == "pilot":
+            buckets["pilot"].append(p)
+        else:
+            other.append(p)
+
+    # Distribute untagged posts evenly across buckets
+    for i, p in enumerate(other):
+        buckets[SOURCES[i % len(SOURCES)]].append(p)
+
+    # ── Sort each bucket deterministically (by uri) before batching ───────
+    FIXED_SEED = 42
+    for key in buckets:
+        buckets[key].sort(key=lambda p: p.get("uri", ""))
+        rng_fixed = random.Random(FIXED_SEED)
+        rng_fixed.shuffle(buckets[key])
+
+    # ── Build batches ─────────────────────────────────────────────────────
+    # Each batch: PER_SOURCE from each bucket, remainder from first bucket
+    n_batches = len(posts) // BATCH_SIZE
+    batches   = []
+    idxs      = {s: 0 for s in SOURCES}
+
+    for b in range(n_batches):
+        batch = []
+        for i, s in enumerate(SOURCES):
+            take = PER_SOURCE if i < len(SOURCES) - 1 else (BATCH_SIZE - PER_SOURCE * (len(SOURCES) - 1))
+            start = idxs[s]
+            end   = start + take
+            batch.extend(buckets[s][start:end])
+            idxs[s] = end
+
+        # Shuffle within batch using a fixed seed (same for all annotators)
+        # so all annotators get same 100 posts, different order per person
+        rng_batch = random.Random(FIXED_SEED + b)
+        rng_batch.shuffle(batch)
+        batches.append(batch)
+
+    # Handle leftover posts (< 100) as a final partial batch
+    leftover = []
+    for s in SOURCES:
+        leftover.extend(buckets[s][idxs[s]:])
+    if leftover:
+        rng_left = random.Random(FIXED_SEED + n_batches)
+        rng_left.shuffle(leftover)
+        batches.append(leftover)
+
+    # ── Per-annotator shuffle within each batch ───────────────────────────
+    ann_seed = int(hashlib.sha256(annotator_name.lower().strip().encode()).hexdigest(), 16) % (2**32)
+    rng_ann  = random.Random(ann_seed)
+
+    final = []
+    for batch in batches:
+        b = batch.copy()
+        rng_ann.shuffle(b)
+        final.extend(b)
+
+    return final
 
 # ── Media helpers ──────────────────────────────────────────────────────────────
 
