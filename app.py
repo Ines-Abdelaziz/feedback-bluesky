@@ -321,7 +321,41 @@ def shuffle_posts_for_annotator(posts, annotator_name):
     """
     import random, hashlib
 
+    FIXED_SEED   = 42
     BATCH_SIZE   = 100
+
+    # ── Firehose: simple batching (no source splits needed) ───────────────
+    # Posts are already randomly sampled from the firehose.
+    # Sort deterministically, split into batches of 100, shuffle within
+    # each batch with a fixed seed (same posts per batch for all annotators),
+    # then apply per-annotator shuffle within each batch.
+    if all(p.get("source", "") == "firehose" for p in posts[:5]):
+        posts_sorted = sorted(posts, key=lambda p: p.get("uri", ""))
+        rng_fixed = random.Random(FIXED_SEED)
+        rng_fixed.shuffle(posts_sorted)
+
+        n_batches = len(posts_sorted) // BATCH_SIZE
+        batches   = []
+        for b in range(n_batches):
+            batch = posts_sorted[b*BATCH_SIZE:(b+1)*BATCH_SIZE]
+            rng_b = random.Random(FIXED_SEED + b)
+            rng_b.shuffle(batch)
+            batches.append(batch)
+        leftover = posts_sorted[n_batches*BATCH_SIZE:]
+        if leftover:
+            rng_l = random.Random(FIXED_SEED + n_batches)
+            rng_l.shuffle(leftover)
+            batches.append(leftover)
+
+        ann_seed = int(hashlib.sha256(annotator_name.lower().strip().encode()).hexdigest(), 16) % (2**32)
+        rng_ann  = random.Random(ann_seed)
+        final = []
+        for batch in batches:
+            b = batch.copy()
+            rng_ann.shuffle(b)
+            final.extend(b)
+        return final
+
     SOURCES      = ["ines_1k", "sayeh_unlabeled", "pilot"]
     PER_SOURCE   = BATCH_SIZE // len(SOURCES)   # 33 each, last gets remainder
 
@@ -355,7 +389,6 @@ def shuffle_posts_for_annotator(posts, annotator_name):
         buckets[SOURCES[i % len(SOURCES)]].append(p)
 
     # ── Sort each bucket deterministically (by uri) before batching ───────
-    FIXED_SEED = 42
     for key in buckets:
         buckets[key].sort(key=lambda p: p.get("uri", ""))
         rng_fixed = random.Random(FIXED_SEED)
@@ -524,13 +557,23 @@ def append_to_sheet(data: dict, max_retries: int = 3):
     return False, "Max retries exceeded"
 
 
-def fetch_saved_progress(annotator_name: str) -> list:
+def fetch_saved_progress(annotator_name: str, survey_type: str = "main") -> list:
+    """Fetch saved rows for this annotator filtered by survey type.
+    Main survey: display_num < DISPLAY_NUM_OFFSET
+    Firehose:    display_num >= DISPLAY_NUM_OFFSET
+    """
     if not GOOGLE_SHEET_READ_URL:
         return []
     try:
         resp = requests.get(GOOGLE_SHEET_READ_URL, params={"annotator": annotator_name}, timeout=15)
         if resp.status_code == 200:
-            return resp.json().get("rows", [])
+            all_rows = resp.json().get("rows", [])
+            if survey_type == "firehose":
+                return [r for r in all_rows
+                        if int(r.get("display_num", 0)) >= DISPLAY_NUM_OFFSET]
+            else:
+                return [r for r in all_rows
+                        if int(r.get("display_num", 0)) < DISPLAY_NUM_OFFSET]
     except Exception:
         pass
     return []
@@ -624,7 +667,7 @@ strong language not targeting anyone, fictional violence in art/games, journalis
     saved_rows = []
     if name_valid:
         with st.spinner("Checking for saved progress..."):
-            saved_rows = fetch_saved_progress(name)
+            saved_rows = fetch_saved_progress(name, st.session_state.get("survey_type", "main"))
     resume_available = len(saved_rows) > 0
     resume           = False
 
