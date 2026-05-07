@@ -222,7 +222,9 @@ GOOGLE_APPS_SCRIPT_URL = st.secrets["GOOGLE_APPS_SCRIPT_URL"]
 GOOGLE_SHEET_READ_URL  = st.secrets.get("GOOGLE_SHEET_READ_URL", "")
 HF_TOKEN               = st.secrets.get("HF_TOKEN", "")
 HF_JSONL_URL           = st.secrets.get("HF_JSONL_URL", "")
-# e.g. https://huggingface.co/datasets/ines-abdelaziz/neurips-content-moderation/resolve/main/data/pilot_1k.jsonl
+HF_FIREHOSE_JSONL_URL  = st.secrets.get("HF_FIREHOSE_JSONL_URL", "")
+# e.g. https://huggingface.co/datasets/ines-abdelaziz/neurips-content-moderation/resolve/main/data/firehose_1k.jsonl
+DISPLAY_NUM_OFFSET     = 10000   # firehose posts get display_num 10001, 10002, ...
 
 AUTOSAVE_EVERY = 1
 
@@ -244,6 +246,7 @@ LABELS = {
 
 for k, v in {
     "page":               "intro",
+    "survey_type":        "main",   # "main" or "firehose"
     "annotator_name":     "",
     "posts":              [],
     "current_idx":        0,
@@ -280,7 +283,16 @@ def load_posts_from_hf(url: str, token: str) -> list:
         return []
 
 
-def load_posts() -> list:
+def load_posts(survey_type: str = "main") -> list:
+    if survey_type == "firehose":
+        if HF_FIREHOSE_JSONL_URL:
+            posts = load_posts_from_hf(HF_FIREHOSE_JSONL_URL, HF_TOKEN)
+            # Offset display_num so firehose posts don't clash with main survey
+            for i, p in enumerate(posts):
+                p["display_num"] = DISPLAY_NUM_OFFSET + i + 1
+            return posts
+        st.error("HF_FIREHOSE_JSONL_URL not set in secrets.")
+        return []
     if HF_JSONL_URL:
         return load_posts_from_hf(HF_JSONL_URL, HF_TOKEN)
     # Fallback: legacy CSV
@@ -484,6 +496,7 @@ def append_to_sheet(data: dict, max_retries: int = 3):
         "time_spent_sec":    data["time_spent_sec"],
         "unsafe_categories": data.get("unsafe_categories", ""),
         "attribution_source":data.get("attribution_source", ""),
+        "survey_type":       data.get("survey_type", "main"),
     }
     for attempt in range(max_retries):
         try:
@@ -559,10 +572,22 @@ def intro_page():
 </div>
 """, unsafe_allow_html=True)
 
+    # Survey type selector
+    st.markdown("### Select survey")
+    survey_type = st.radio(
+        "Which dataset would you like to label?",
+        options=["main", "firehose"],
+        format_func=lambda x: "📋 Main survey (3,000 posts — curated safe + unsafe)" if x == "main" else "🔥 Firehose survey (1,000 posts — random sample)",
+        horizontal=False,
+        key="survey_type_select",
+    )
+    st.session_state.survey_type = survey_type
+
     st.markdown("---")
     st.markdown("### About this study")
-    st.markdown("""
-You will review **3,000 Bluesky posts** and label each one as **Safe** or **Unsafe**
+    n_posts = "3,000" if st.session_state.get("survey_type","main") == "main" else "1,000"
+    st.markdown(f"""
+You will review **{n_posts} Bluesky posts** and label each one as **Safe** or **Unsafe**
 according to Bluesky's Community Guidelines. For each post you must also provide
 a brief written reasoning.
 
@@ -612,7 +637,7 @@ strong language not targeting anyone, fictional violence in art/games, journalis
     btn_label = "Resume labeling →" if (resume_available and resume) else "Begin labeling →"
 
     if st.button(btn_label, type="primary", disabled=not name_valid, use_container_width=True):
-        posts = shuffle_posts_for_annotator(load_posts(), name)
+        posts = shuffle_posts_for_annotator(load_posts(st.session_state.survey_type), name)
         st.session_state.annotator_name = name
         st.session_state.posts = posts
 
@@ -821,6 +846,7 @@ def survey_page():
             "reason":            reason.strip(),
             "time_spent_sec":    round(time_spent, 1),
             "attribution_source":"|".join(selected_attributions),
+            "survey_type":       st.session_state.get("survey_type", "main"),
         })
 
         if is_last:
