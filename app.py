@@ -638,12 +638,10 @@ def survey_page():
         if len(media["image_urls"]) == 1:
             render_blurred_image(media["image_urls"][0])
         else:
-            st.markdown('<div class="media-grid-cols" style="display:flex;flex-wrap:wrap;gap:8px;">', unsafe_allow_html=True)
             cols = st.columns(min(len(media["image_urls"]), 2))
             for i, url in enumerate(media["image_urls"]):
                 with cols[i % 2]:
                     render_blurred_image(url, f"Hover to reveal image {i+1}")
-            st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Video — browser fetches directly ───────────────────────────────────────
     if media["has_video"]:
