@@ -166,6 +166,8 @@ HF_JSONL_URL = st.secrets.get("HF_JSONL_URL", "")
 HF_FIREHOSE_JSONL_URL = st.secrets.get("HF_FIREHOSE_JSONL_URL", "")
 HF_PILOT_REMAINING_URL = st.secrets.get("HF_PILOT_REMAINING_URL", "")
 HF_PILOT_DISAGREE_URL = st.secrets.get("HF_PILOT_DISAGREE_URL", "")
+HF_AUTOMOD_URL = st.secrets.get("HF_AUTOMOD_URL", "")
+DISPLAY_NUM_OFFSET_AUTOMOD = 40000  # automod: 40001, 40002, ...
 DISPLAY_NUM_OFFSET = 10000  # firehose
 DISPLAY_NUM_OFFSET_PILOT = 20000  # pilot_remaining
 DISPLAY_NUM_OFFSET_DISAGREE = 30000  # pilot_disagree
@@ -274,6 +276,14 @@ def load_posts(survey_type: str = "main") -> list:
             return posts
         st.error("HF_PILOT_DISAGREE_URL not set in secrets.")
         return []
+    if survey_type == "automod":
+        if HF_AUTOMOD_URL:
+            posts = load_posts_from_hf(HF_AUTOMOD_URL, HF_TOKEN)
+            for p in posts:
+                p["source"] = "automod"
+            return posts
+        st.error("HF_AUTOMOD_URL not set in secrets.")
+        return []
     if HF_JSONL_URL:
         return load_posts_from_hf(HF_JSONL_URL, HF_TOKEN)
     try:
@@ -326,8 +336,8 @@ def shuffle_posts_for_annotator(posts, annotator_name):
             final.extend(b)
         return final
 
-    # ── Firehose: simple batching ──────────────────────────────────────────
-    if all(p.get("source", "") == "firehose" for p in posts[:5]):
+    # ── Firehose / automod: simple batching ──────────────────────────────
+    if all(p.get("source", "") in ("firehose", "automod") for p in posts[:5]):
         posts_sorted = sorted(posts, key=lambda p: p.get("uri", ""))
         rng_fixed = random.Random(FIXED_SEED)
         rng_fixed.shuffle(posts_sorted)
@@ -490,6 +500,12 @@ def get_post_media(post: dict) -> dict:
     if video_field and str(video_field).strip().lower() not in ("nan", "none", ""):
         video_url = str(video_field).strip()
 
+    # Handle single "image" field (automod format)
+    if not image_urls and not video_url:
+        single_img = str(post.get("image", "")).strip()
+        if single_img and single_img.lower() not in ("nan", "none", ""):
+            image_urls = [single_img]
+
     if not image_urls and not video_url:
         legacy_img = str(post.get("image_url", "")).strip()
         if legacy_img and legacy_img.lower() not in ("nan", "none", ""):
@@ -577,7 +593,15 @@ def fetch_saved_progress(annotator_name: str, survey_type: str = "main") -> list
                 return [
                     r
                     for r in all_rows
-                    if int(r.get("display_num", 0)) >= DISPLAY_NUM_OFFSET_DISAGREE
+                    if DISPLAY_NUM_OFFSET_DISAGREE
+                    <= int(r.get("display_num", 0))
+                    < DISPLAY_NUM_OFFSET_AUTOMOD
+                ]
+            elif survey_type == "automod":
+                return [
+                    r
+                    for r in all_rows
+                    if int(r.get("display_num", 0)) >= DISPLAY_NUM_OFFSET_AUTOMOD
                 ]
             else:  # main
                 return [
@@ -634,6 +658,7 @@ def intro_page():
         "firehose": "🔥 Firehose survey (1,000 posts — random sample)",
         "pilot_remaining": "🧪 Pilot completion (remaining unlabeled pilot posts)",
         "pilot_disagree": "⚖️ Pilot disagreements (tiebreaker — posts where Ines & adash disagreed)",
+        "automod": "🤖 AutoMod unflagged (posts Bluesky missed — verify if actually unsafe)",
     }
     survey_type = st.radio(
         "Which dataset would you like to label?",
@@ -651,6 +676,7 @@ def intro_page():
         "firehose": "1,000",
         "pilot_remaining": "~728",
         "pilot_disagree": "~50",
+        "automod": "~1,000",
     }
     n_posts = n_posts_map.get(survey_type, "?")
 
@@ -658,6 +684,11 @@ def intro_page():
         st.info(
             "⚖️ **Tiebreaker mode** — these are posts where Ines and adash disagreed. "
             "Each post shows what they each labeled. Your job is to cast the deciding vote."
+        )
+    if survey_type == "automod":
+        st.info(
+            "🤖 **AutoMod unflagged** — these posts were NOT flagged by Bluesky's automated "
+            "moderation but may still contain unsafe content. Label them as you normally would."
         )
 
     st.markdown(f"""
@@ -952,7 +983,11 @@ def survey_page():
                         else (
                             (DISPLAY_NUM_OFFSET_DISAGREE + idx + 1)
                             if st.session_state.get("survey_type") == "pilot_disagree"
-                            else post.get("display_num", idx + 1)
+                            else (
+                                (DISPLAY_NUM_OFFSET_AUTOMOD + idx + 1)
+                                if st.session_state.get("survey_type") == "automod"
+                                else post.get("display_num", idx + 1)
+                            )
                         )
                     )
                 ),
