@@ -7,13 +7,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 st.set_page_config(
-    page_title="Bluesky Moderation Study", page_icon="🔵", layout="centered",
+    page_title="Bluesky Moderation Study",
+    page_icon="🔵",
+    layout="centered",
     initial_sidebar_state="collapsed",
 )
 
 # ── Styling ────────────────────────────────────────────────────────────────────
 
-st.markdown("""
+st.markdown(
+    """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
@@ -150,53 +153,84 @@ div[data-baseweb="tag"] span { color: #0f172a !important; -webkit-text-fill-colo
 }
 .blurred-image-wrap:hover .blur-hint { opacity: 0; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
 GOOGLE_APPS_SCRIPT_URL = st.secrets["GOOGLE_APPS_SCRIPT_URL"]
-GOOGLE_SHEET_READ_URL  = st.secrets.get("GOOGLE_SHEET_READ_URL", "")
-HF_TOKEN               = st.secrets.get("HF_TOKEN", "")
-HF_JSONL_URL           = st.secrets.get("HF_JSONL_URL", "")
-HF_FIREHOSE_JSONL_URL  = st.secrets.get("HF_FIREHOSE_JSONL_URL", "")
-DISPLAY_NUM_OFFSET     = 10000
+GOOGLE_SHEET_READ_URL = st.secrets.get("GOOGLE_SHEET_READ_URL", "")
+HF_TOKEN = st.secrets.get("HF_TOKEN", "")
+HF_JSONL_URL = st.secrets.get("HF_JSONL_URL", "")
+HF_FIREHOSE_JSONL_URL = st.secrets.get("HF_FIREHOSE_JSONL_URL", "")
+HF_PILOT_REMAINING_URL = st.secrets.get("HF_PILOT_REMAINING_URL", "")
+HF_PILOT_DISAGREE_URL = st.secrets.get("HF_PILOT_DISAGREE_URL", "")
+DISPLAY_NUM_OFFSET = 10000  # firehose
+DISPLAY_NUM_OFFSET_PILOT = 20000  # pilot_remaining
+DISPLAY_NUM_OFFSET_DISAGREE = 30000  # pilot_disagree
 
 AUTOSAVE_EVERY = 1
 
 # ── Labels ─────────────────────────────────────────────────────────────────────
 
 LABELS = {
-    "S1": ("porn",             "Contain pornographic material, including explicit depictions of sexual acts or genitalia intended to elicit sexual arousal."),
-    "S2": ("sexual",           "Contain sexually suggestive or provocative content that does not reach the threshold of pornography."),
-    "S3": ("sexual-figurative","Contain figurative or symbolic sexual content, such as stylized or abstract representations of sexual themes."),
-    "S4": ("self-harm",        "Promote self-harm, including graphic images, glorifying discussions, or triggering stories."),
-    "S5": ("nudity",           "Contain non-sexual nudity presented without an overt sexual context, including artistic or documentary exposure."),
-    "S6": ("intolerant",       "Contain discrimination against protected groups."),
-    "S7": ("graphic-media",    "Contain graphic or gory media, including depictions of violence, injury, death, or bodily harm."),
-    "S8": ("rude",             "Contain rude or impolite content, including crude language and disrespectful comments without constructive purpose."),
-    "S9": ("threat",           "Promote violence or harm towards others, including threats, incitement, or advocacy of harm."),
+    "S1": (
+        "porn",
+        "Contain pornographic material, including explicit depictions of sexual acts or genitalia intended to elicit sexual arousal.",
+    ),
+    "S2": (
+        "sexual",
+        "Contain sexually suggestive or provocative content that does not reach the threshold of pornography.",
+    ),
+    "S3": (
+        "sexual-figurative",
+        "Contain figurative or symbolic sexual content, such as stylized or abstract representations of sexual themes.",
+    ),
+    "S4": (
+        "self-harm",
+        "Promote self-harm, including graphic images, glorifying discussions, or triggering stories.",
+    ),
+    "S5": (
+        "nudity",
+        "Contain non-sexual nudity presented without an overt sexual context, including artistic or documentary exposure.",
+    ),
+    "S6": ("intolerant", "Contain discrimination against protected groups."),
+    "S7": (
+        "graphic-media",
+        "Contain graphic or gory media, including depictions of violence, injury, death, or bodily harm.",
+    ),
+    "S8": (
+        "rude",
+        "Contain rude or impolite content, including crude language and disrespectful comments without constructive purpose.",
+    ),
+    "S9": (
+        "threat",
+        "Promote violence or harm towards others, including threats, incitement, or advocacy of harm.",
+    ),
 }
 
 # ── Session state ──────────────────────────────────────────────────────────────
 
 for k, v in {
-    "page":                "intro",
-    "survey_type":         "main",
-    "annotator_name":      "",
-    "posts":               [],
-    "current_idx":         0,
-    "feedback_data":       [],
-    "saved_post_ids":      set(),
-    "saved_up_to":         -1,
+    "page": "intro",
+    "survey_type": "main",
+    "annotator_name": "",
+    "posts": [],
+    "current_idx": 0,
+    "feedback_data": [],
+    "saved_post_ids": set(),
+    "saved_up_to": -1,
     "submission_complete": False,
-    "post_start_time":     None,
-    "_do_autosave":        False,
-    "resumed_from":        None,
+    "post_start_time": None,
+    "_do_autosave": False,
+    "resumed_from": None,
 }.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
 # ── Data loading (cached) ──────────────────────────────────────────────────────
+
 
 @st.cache_data(ttl=3600)
 def load_posts_from_hf(url: str, token: str) -> list:
@@ -224,10 +258,27 @@ def load_posts(survey_type: str = "main") -> list:
             return posts
         st.error("HF_FIREHOSE_JSONL_URL not set in secrets.")
         return []
+    if survey_type == "pilot_remaining":
+        if HF_PILOT_REMAINING_URL:
+            posts = load_posts_from_hf(HF_PILOT_REMAINING_URL, HF_TOKEN)
+            for p in posts:
+                p["source"] = p.get("source", "pilot")
+            return posts
+        st.error("HF_PILOT_REMAINING_URL not set in secrets.")
+        return []
+    if survey_type == "pilot_disagree":
+        if HF_PILOT_DISAGREE_URL:
+            posts = load_posts_from_hf(HF_PILOT_DISAGREE_URL, HF_TOKEN)
+            for p in posts:
+                p["source"] = p.get("source", "pilot")
+            return posts
+        st.error("HF_PILOT_DISAGREE_URL not set in secrets.")
+        return []
     if HF_JSONL_URL:
         return load_posts_from_hf(HF_JSONL_URL, HF_TOKEN)
     try:
         import pandas as pd
+
         df = pd.read_csv("data/survey_posts.csv")
         if "display_num" in df.columns:
             df = df.sort_values("display_num").reset_index(drop=True)
@@ -243,6 +294,38 @@ def shuffle_posts_for_annotator(posts, annotator_name):
     FIXED_SEED = 42
     BATCH_SIZE = 100
 
+    # ── Pilot remaining / disagree: simple shuffle in batches ────────────
+    if (
+        all(p.get("source", "") in ("pilot", "") for p in posts[:5])
+        and len(set(p.get("source", "") for p in posts[:5])) == 1
+        and len(posts) <= 1100
+    ):  # not the main 3K survey
+        posts_sorted = sorted(posts, key=lambda p: p.get("uri", ""))
+        rng_fixed = random.Random(FIXED_SEED)
+        rng_fixed.shuffle(posts_sorted)
+        n_batches = len(posts_sorted) // BATCH_SIZE
+        batches = []
+        for b in range(n_batches):
+            batch = posts_sorted[b * BATCH_SIZE : (b + 1) * BATCH_SIZE]
+            rng_b = random.Random(FIXED_SEED + b)
+            rng_b.shuffle(batch)
+            batches.append(batch)
+        leftover = posts_sorted[n_batches * BATCH_SIZE :]
+        if leftover:
+            rng_l = random.Random(FIXED_SEED + n_batches)
+            rng_l.shuffle(leftover)
+            batches.append(leftover)
+        ann_seed = int(
+            hashlib.sha256(annotator_name.lower().strip().encode()).hexdigest(), 16
+        ) % (2**32)
+        rng_ann = random.Random(ann_seed)
+        final = []
+        for batch in batches:
+            b = batch.copy()
+            rng_ann.shuffle(b)
+            final.extend(b)
+        return final
+
     # ── Firehose: simple batching ──────────────────────────────────────────
     if all(p.get("source", "") == "firehose" for p in posts[:5]):
         posts_sorted = sorted(posts, key=lambda p: p.get("uri", ""))
@@ -251,17 +334,19 @@ def shuffle_posts_for_annotator(posts, annotator_name):
         n_batches = len(posts_sorted) // BATCH_SIZE
         batches = []
         for b in range(n_batches):
-            batch = posts_sorted[b*BATCH_SIZE:(b+1)*BATCH_SIZE]
+            batch = posts_sorted[b * BATCH_SIZE : (b + 1) * BATCH_SIZE]
             rng_b = random.Random(FIXED_SEED + b)
             rng_b.shuffle(batch)
             batches.append(batch)
-        leftover = posts_sorted[n_batches*BATCH_SIZE:]
+        leftover = posts_sorted[n_batches * BATCH_SIZE :]
         if leftover:
             rng_l = random.Random(FIXED_SEED + n_batches)
             rng_l.shuffle(leftover)
             batches.append(leftover)
-        ann_seed = int(hashlib.sha256(annotator_name.lower().strip().encode()).hexdigest(), 16) % (2**32)
-        rng_ann  = random.Random(ann_seed)
+        ann_seed = int(
+            hashlib.sha256(annotator_name.lower().strip().encode()).hexdigest(), 16
+        ) % (2**32)
+        rng_ann = random.Random(ann_seed)
         final = []
         for batch in batches:
             b = batch.copy()
@@ -274,9 +359,9 @@ def shuffle_posts_for_annotator(posts, annotator_name):
     PER_SOURCE = BATCH_SIZE // len(SOURCES)
 
     buckets = {s: [] for s in SOURCES}
-    other   = []
+    other = []
     for p in posts:
-        src_tag   = p.get("source", "")
+        src_tag = p.get("source", "")
         media_url = ""
         imgs = p.get("images") or []
         if imgs and isinstance(imgs[0], dict):
@@ -301,16 +386,21 @@ def shuffle_posts_for_annotator(posts, annotator_name):
         rng_fixed = random.Random(FIXED_SEED)
         rng_fixed.shuffle(buckets[key])
 
+    # ── Balanced batching (33/33/34 per source per batch) ────────────────
     n_batches = len(posts) // BATCH_SIZE
-    batches   = []
-    idxs      = {s: 0 for s in SOURCES}
+    batches = []
+    idxs = {s: 0 for s in SOURCES}
 
     for b in range(n_batches):
         batch = []
         for i, s in enumerate(SOURCES):
-            take  = PER_SOURCE if i < len(SOURCES)-1 else (BATCH_SIZE - PER_SOURCE*(len(SOURCES)-1))
+            take = (
+                PER_SOURCE
+                if i < len(SOURCES) - 1
+                else (BATCH_SIZE - PER_SOURCE * (len(SOURCES) - 1))
+            )
             start = idxs[s]
-            end   = start + take
+            end = start + take
             batch.extend(buckets[s][start:end])
             idxs[s] = end
         rng_batch = random.Random(FIXED_SEED + b)
@@ -319,14 +409,16 @@ def shuffle_posts_for_annotator(posts, annotator_name):
 
     leftover = []
     for s in SOURCES:
-        leftover.extend(buckets[s][idxs[s]:])
+        leftover.extend(buckets[s][idxs[s] :])
     if leftover:
         rng_left = random.Random(FIXED_SEED + n_batches)
         rng_left.shuffle(leftover)
         batches.append(leftover)
 
-    ann_seed = int(hashlib.sha256(annotator_name.lower().strip().encode()).hexdigest(), 16) % (2**32)
-    rng_ann  = random.Random(ann_seed)
+    ann_seed = int(
+        hashlib.sha256(annotator_name.lower().strip().encode()).hexdigest(), 16
+    ) % (2**32)
+    rng_ann = random.Random(ann_seed)
     final = []
     for batch in batches:
         b = batch.copy()
@@ -334,7 +426,9 @@ def shuffle_posts_for_annotator(posts, annotator_name):
         final.extend(b)
     return final
 
+
 # ── Media helpers — browser-native, no Python fetching ────────────────────────
+
 
 def media_url_with_token(url: str) -> str:
     """Append HF token as query param so browser can fetch private HF files."""
@@ -347,33 +441,42 @@ def media_url_with_token(url: str) -> str:
 
 
 def render_blurred_image(url: str, label: str = "Hover to reveal image"):
-    """Render image using browser-native <img> tag — no Python HTTP round-trip."""
+    """Render image using a single self-contained markdown block."""
     src = media_url_with_token(url)
-    st.markdown(f"""
-<div class="blurred-image-wrap">
-    <img src="{src}" alt="post image" loading="lazy">
-    <div class="blur-hint">{label}</div>
-</div>""", unsafe_allow_html=True)
+    # Use a unique wrapper id to avoid DOM conflicts
+    import hashlib
+
+    uid = hashlib.md5(url.encode()).hexdigest()[:8]
+    st.markdown(
+        f"""<div id="img-wrap-{uid}" class="blurred-image-wrap"><img src="{src}" alt="post image" loading="lazy"><div class="blur-hint">{label}</div></div>""",
+        unsafe_allow_html=True,
+    )
 
 
 def render_video(url: str):
     """Render video using browser-native <video> tag."""
     src = media_url_with_token(url)
-    st.markdown(f"""
-<video controls style="width:100%;border-radius:10px;max-height:400px;" preload="metadata">
-    <source src="{src}">
-    Your browser does not support video playback.
-</video>""", unsafe_allow_html=True)
+    import hashlib
+
+    uid = hashlib.md5(url.encode()).hexdigest()[:8]
+    st.markdown(
+        f"""<div id="vid-wrap-{uid}"><video controls style="width:100%;border-radius:10px;max-height:400px;" preload="metadata"><source src="{src}">Your browser does not support video playback.</video></div>""",
+        unsafe_allow_html=True,
+    )
 
 
 def get_post_media(post: dict) -> dict:
     images_field = post.get("images") or []
-    video_field  = post.get("video")
+    video_field = post.get("video")
 
     image_urls = []
     if isinstance(images_field, list):
         for item in images_field:
-            url = (item.get("file") or item.get("url") or "") if isinstance(item, dict) else str(item)
+            url = (
+                (item.get("file") or item.get("url") or "")
+                if isinstance(item, dict)
+                else str(item)
+            )
             url = url.strip()
             if url and url.lower() not in ("nan", "none", ""):
                 image_urls.append(url)
@@ -394,24 +497,26 @@ def get_post_media(post: dict) -> dict:
 
     return {
         "image_urls": image_urls,
-        "video_url":  video_url,
-        "has_image":  len(image_urls) > 0,
-        "has_video":  video_url is not None,
+        "video_url": video_url,
+        "has_image": len(image_urls) > 0,
+        "has_video": video_url is not None,
     }
+
 
 # ── Google Sheets ──────────────────────────────────────────────────────────────
 
+
 def append_to_sheet(data: dict, max_retries: int = 3):
     payload = {
-        "annotator_name":    data["annotator_name"],
-        "post_id":           data["post_id"],
-        "display_num":       data["display_num"],
-        "label":             data["label"],
-        "reason":            data["reason"],
-        "time_spent_sec":    data["time_spent_sec"],
+        "annotator_name": data["annotator_name"],
+        "post_id": data["post_id"],
+        "display_num": data["display_num"],
+        "label": data["label"],
+        "reason": data["reason"],
+        "time_spent_sec": data["time_spent_sec"],
         "unsafe_categories": data.get("unsafe_categories", ""),
-        "attribution_source":data.get("attribution_source", ""),
-        "survey_type":       data.get("survey_type", "main"),
+        "attribution_source": data.get("attribution_source", ""),
+        "survey_type": data.get("survey_type", "main"),
     }
     for attempt in range(max_retries):
         try:
@@ -428,7 +533,11 @@ def append_to_sheet(data: dict, max_retries: int = 3):
                         return True, "OK"
                     return False, result.get("message", "Unknown error")
                 except json.JSONDecodeError:
-                    return (True, "OK") if "success" in resp.text.lower() else (False, resp.text[:200])
+                    return (
+                        (True, "OK")
+                        if "success" in resp.text.lower()
+                        else (False, resp.text[:200])
+                    )
             if attempt < max_retries - 1:
                 time.sleep(2)
         except requests.exceptions.Timeout:
@@ -443,22 +552,48 @@ def fetch_saved_progress(annotator_name: str, survey_type: str = "main") -> list
     if not GOOGLE_SHEET_READ_URL:
         return []
     try:
-        resp = requests.get(GOOGLE_SHEET_READ_URL, params={"annotator": annotator_name}, timeout=15)
+        resp = requests.get(
+            GOOGLE_SHEET_READ_URL, params={"annotator": annotator_name}, timeout=15
+        )
         if resp.status_code == 200:
             all_rows = resp.json().get("rows", [])
             if survey_type == "firehose":
-                return [r for r in all_rows if int(r.get("display_num", 0)) >= DISPLAY_NUM_OFFSET]
-            else:
-                return [r for r in all_rows if int(r.get("display_num", 0)) < DISPLAY_NUM_OFFSET]
+                return [
+                    r
+                    for r in all_rows
+                    if DISPLAY_NUM_OFFSET
+                    <= int(r.get("display_num", 0))
+                    < DISPLAY_NUM_OFFSET_PILOT
+                ]
+            elif survey_type == "pilot_remaining":
+                return [
+                    r
+                    for r in all_rows
+                    if DISPLAY_NUM_OFFSET_PILOT
+                    <= int(r.get("display_num", 0))
+                    < DISPLAY_NUM_OFFSET_DISAGREE
+                ]
+            elif survey_type == "pilot_disagree":
+                return [
+                    r
+                    for r in all_rows
+                    if int(r.get("display_num", 0)) >= DISPLAY_NUM_OFFSET_DISAGREE
+                ]
+            else:  # main
+                return [
+                    r
+                    for r in all_rows
+                    if int(r.get("display_num", 0)) < DISPLAY_NUM_OFFSET
+                ]
     except Exception:
         pass
     return []
 
 
 def autosave_pending(force: bool = False):
-    feedback  = st.session_state.feedback_data
+    feedback = st.session_state.feedback_data
     saved_ids = st.session_state.get("saved_post_ids", set())
-    pending   = [r for r in feedback if r["post_id"] not in saved_ids]
+    pending = [r for r in feedback if r["post_id"] not in saved_ids]
     if not pending:
         return True
     if not force and len(pending) < AUTOSAVE_EVERY:
@@ -477,23 +612,33 @@ def autosave_pending(force: bool = False):
     st.toast(f"💾 Progress saved ({len(saved_ids)}/3,000 posts)", icon="💾")
     return True
 
+
 # ── Pages ──────────────────────────────────────────────────────────────────────
 
+
 def intro_page():
-    st.markdown("""
+    st.markdown(
+        """
 <div style="text-align:center; padding:10px 0 24px;">
     <div style="font-size:2.8em; margin-bottom:10px;">🔵</div>
     <h1 style="color:#1e3a8a; margin:0; font-size:2em; font-weight:700;">Bluesky Content Moderation</h1>
     <p style="color:#64748b; margin:6px 0 0;">Internal Team Labeling Study &nbsp;·&nbsp; Max Planck Institute for Software Systems</p>
 </div>
-""", unsafe_allow_html=True)
+""",
+        unsafe_allow_html=True,
+    )
 
     st.markdown("### Select survey")
+    SURVEY_LABELS = {
+        "main": "📋 Main survey (3,000 posts — curated safe + unsafe)",
+        "firehose": "🔥 Firehose survey (1,000 posts — random sample)",
+        "pilot_remaining": "🧪 Pilot completion (remaining unlabeled pilot posts)",
+        "pilot_disagree": "⚖️ Pilot disagreements (tiebreaker — posts where Ines & adash disagreed)",
+    }
     survey_type = st.radio(
         "Which dataset would you like to label?",
-        options=["main", "firehose"],
-        format_func=lambda x: "📋 Main survey (3,000 posts — curated safe + unsafe)" if x == "main"
-                              else "🔥 Firehose survey (1,000 posts — random sample)",
+        options=list(SURVEY_LABELS.keys()),
+        format_func=lambda x: SURVEY_LABELS[x],
         horizontal=False,
         key="survey_type_select",
     )
@@ -501,7 +646,20 @@ def intro_page():
 
     st.markdown("---")
     st.markdown("### About this study")
-    n_posts = "3,000" if survey_type == "main" else "1,000"
+    n_posts_map = {
+        "main": "3,000",
+        "firehose": "1,000",
+        "pilot_remaining": "~728",
+        "pilot_disagree": "~50",
+    }
+    n_posts = n_posts_map.get(survey_type, "?")
+
+    if survey_type == "pilot_disagree":
+        st.info(
+            "⚖️ **Tiebreaker mode** — these are posts where Ines and adash disagreed. "
+            "Each post shows what they each labeled. Your job is to cast the deciding vote."
+        )
+
     st.markdown(f"""
 You will review **{n_posts} Bluesky posts** and label each one as **Safe** or **Unsafe**
 according to Bluesky's Community Guidelines. For each post you must also provide
@@ -512,17 +670,22 @@ a brief written reasoning.
     """)
 
     st.markdown("### Unsafe content categories")
-    st.markdown("A post is **Unsafe** if it falls into one or more of the following categories:")
+    st.markdown(
+        "A post is **Unsafe** if it falls into one or more of the following categories:"
+    )
     rows_html = "".join(
         f'<tr><td class="cat-label">{name}</td><td>{desc}</td></tr>'
         for (name, desc) in LABELS.values()
     )
-    st.markdown(f"""
+    st.markdown(
+        f"""
 <table class="cat-table">
 <tr><th style="width:22%">Category</th><th>Mark as <strong>Unsafe</strong> if the post…</th></tr>
 {rows_html}
 </table>
-""", unsafe_allow_html=True)
+""",
+        unsafe_allow_html=True,
+    )
 
     st.markdown("""
 **Safe** — does not fall into any category above. Includes everyday content, news, humor,
@@ -544,13 +707,19 @@ strong language not targeting anyone, fictional violence in art/games, journalis
     resume = False
     if resume_available:
         completed = len(saved_rows)
-        st.info(f"💾 Found saved progress: **{completed}/{n_posts} posts** already labeled.")
+        st.info(
+            f"💾 Found saved progress: **{completed}/{n_posts} posts** already labeled."
+        )
         resume = st.checkbox(f"Resume from post {completed + 1}", value=True)
 
     st.markdown("---")
-    btn_label = "Resume labeling →" if (resume_available and resume) else "Begin labeling →"
+    btn_label = (
+        "Resume labeling →" if (resume_available and resume) else "Begin labeling →"
+    )
 
-    if st.button(btn_label, type="primary", disabled=not name_valid, use_container_width=True):
+    if st.button(
+        btn_label, type="primary", disabled=not name_valid, use_container_width=True
+    ):
         posts = shuffle_posts_for_annotator(load_posts(survey_type), name)
         st.session_state.annotator_name = name
         st.session_state.posts = posts
@@ -558,18 +727,18 @@ strong language not targeting anyone, fictional violence in art/games, journalis
         if resume_available and resume:
             st.session_state.feedback_data = [
                 {
-                    "annotator_name":  name,
-                    "post_id":         r.get("post_id", ""),
-                    "display_num":     int(r.get("display_num", 0)),
-                    "label":           r.get("label", ""),
-                    "reason":          r.get("reason", ""),
-                    "time_spent_sec":  float(r.get("time_spent_sec", 0)),
+                    "annotator_name": name,
+                    "post_id": r.get("post_id", ""),
+                    "display_num": int(r.get("display_num", 0)),
+                    "label": r.get("label", ""),
+                    "reason": r.get("reason", ""),
+                    "time_spent_sec": float(r.get("time_spent_sec", 0)),
                 }
                 for r in saved_rows
             ]
             done_ids = {r["post_id"] for r in st.session_state.feedback_data}
             st.session_state.saved_post_ids = done_ids
-            st.session_state.saved_up_to    = len(done_ids)
+            st.session_state.saved_up_to = len(done_ids)
 
             def post_key(p):
                 return p.get("post_id") or p.get("uri") or p.get("cid") or ""
@@ -580,39 +749,63 @@ strong language not targeting anyone, fictional violence in art/games, journalis
             )
             st.session_state.resumed_from = len(saved_rows)
         else:
-            st.session_state.feedback_data   = []
-            st.session_state.saved_post_ids  = set()
-            st.session_state.saved_up_to     = -1
-            st.session_state.current_idx     = 0
-            st.session_state.resumed_from    = None
+            st.session_state.feedback_data = []
+            st.session_state.saved_post_ids = set()
+            st.session_state.saved_up_to = -1
+            st.session_state.current_idx = 0
+            st.session_state.resumed_from = None
 
         st.session_state.post_start_time = time.time()
-        st.session_state.page            = "survey"
+        st.session_state.page = "survey"
         st.rerun()
 
 
 def survey_page():
     posts = st.session_state.posts
-    idx   = st.session_state.current_idx
+    idx = st.session_state.current_idx
     total = len(posts)
-    post  = posts[idx]
+    post = posts[idx]
 
     if st.session_state.resumed_from:
         n = st.session_state.resumed_from
-        st.success(f"✅ Resumed — posts 1–{n} are already saved. Continuing from post {n + 1}.")
+        st.success(
+            f"✅ Resumed — posts 1–{n} are already saved. Continuing from post {n + 1}."
+        )
         st.session_state.resumed_from = None
 
     if st.session_state.get("_do_autosave"):
         st.session_state._do_autosave = False
         autosave_pending(force=False)
 
-    st.markdown(f'<p class="progress-label">Post {idx + 1} of {total}</p>', unsafe_allow_html=True)
+    st.markdown(
+        f'<p class="progress-label">Post {idx + 1} of {total}</p>',
+        unsafe_allow_html=True,
+    )
     st.progress((idx + 1) / total)
     st.markdown("---")
 
     raw_text = str(post.get("text", "")).strip()
-    text     = "" if raw_text.lower() in ("nan", "none", "") else raw_text
-    media    = get_post_media(post)
+    text = "" if raw_text.lower() in ("nan", "none", "") else raw_text
+    media = get_post_media(post)
+
+    # Show prior labels for disagreement survey
+    if st.session_state.get("survey_type") == "pilot_disagree":
+        ines_label = post.get("ines_label", "?")
+        adash_label = post.get("adash_label", "?")
+        col1, col2 = st.columns(2)
+        with col1:
+            color = "#22c55e" if ines_label == "Safe" else "#ef4444"
+            st.markdown(
+                f'<div style="background:{color}22;border:1px solid {color};border-radius:8px;padding:8px 14px;font-size:13px;"><b>Ines labeled:</b> {ines_label}</div>',
+                unsafe_allow_html=True,
+            )
+        with col2:
+            color = "#22c55e" if adash_label == "Safe" else "#ef4444"
+            st.markdown(
+                f'<div style="background:{color}22;border:1px solid {color};border-radius:8px;padding:8px 14px;font-size:13px;"><b>adash labeled:</b> {adash_label}</div>',
+                unsafe_allow_html=True,
+            )
+        st.markdown("")
 
     badges = ""
     if media["has_image"]:
@@ -621,8 +814,13 @@ def survey_page():
         badges += '<span class="media-badge badge-video">▶ video</span>'
         badges += '<span class="media-badge badge-audio">🔊 audio</span>'
 
-    text_display = text if text else '<span style="color:#94a3b8;font-style:italic;">(no text)</span>'
-    st.markdown(f"""
+    text_display = (
+        text
+        if text
+        else '<span style="color:#94a3b8;font-style:italic;">(no text)</span>'
+    )
+    st.markdown(
+        f"""
 <div class="post-card">
     <div style="margin-bottom:10px;">
         <div class="post-avatar"></div>
@@ -631,17 +829,17 @@ def survey_page():
     <div class="post-text">{text_display}</div>
     {f'<div style="margin-top:8px;">{badges}</div>' if badges else ''}
 </div>
-""", unsafe_allow_html=True)
+""",
+        unsafe_allow_html=True,
+    )
 
     # ── Images — browser fetches directly ──────────────────────────────────────
     if media["has_image"]:
         if len(media["image_urls"]) == 1:
             render_blurred_image(media["image_urls"][0])
         else:
-            cols = st.columns(min(len(media["image_urls"]), 2))
             for i, url in enumerate(media["image_urls"]):
-                with cols[i % 2]:
-                    render_blurred_image(url, f"Hover to reveal image {i+1}")
+                render_blurred_image(url, f"Hover to reveal image {i+1}")
 
     # ── Video — browser fetches directly ───────────────────────────────────────
     if media["has_video"]:
@@ -670,8 +868,10 @@ def survey_page():
 
     unsafe_labels = []
     if label == "Unsafe":
-        label_options = [f"{name} — {desc[:60]}…" for name, desc in LABELS.values()] + ["Other"]
-        label_keys    = list(LABELS.keys()) + ["Other"]
+        label_options = [f"{name} — {desc[:60]}…" for name, desc in LABELS.values()] + [
+            "Other"
+        ]
+        label_keys = list(LABELS.keys()) + ["Other"]
         selected_display = st.multiselect(
             "**Which categories apply?** * (select all that apply)",
             options=label_options,
@@ -694,7 +894,9 @@ def survey_page():
         with attr_cols[i % n_cols]:
             attribution_checked[opt] = st.checkbox(opt, key=f"attr_{idx}_{opt}")
 
-    selected_attributions = [opt for opt, checked in attribution_checked.items() if checked]
+    selected_attributions = [
+        opt for opt, checked in attribution_checked.items() if checked
+    ]
 
     reason = st.text_area(
         "**Briefly explain your reasoning:** *",
@@ -705,55 +907,83 @@ def survey_page():
 
     cats_filled = label != "Unsafe" or len(unsafe_labels) > 0
     attr_filled = len(selected_attributions) > 0
-    all_filled  = label is not None and reason.strip() != "" and attr_filled and cats_filled
+    all_filled = (
+        label is not None and reason.strip() != "" and attr_filled and cats_filled
+    )
 
     if not all_filled:
         missing = []
-        if label is None:       missing.append("Safe/Unsafe selection")
-        if not cats_filled:     missing.append("at least one unsafe category")
-        if not attr_filled:     missing.append("at least one attribution source")
-        if not reason.strip():  missing.append("reasoning")
+        if label is None:
+            missing.append("Safe/Unsafe selection")
+        if not cats_filled:
+            missing.append("at least one unsafe category")
+        if not attr_filled:
+            missing.append("at least one attribution source")
+        if not reason.strip():
+            missing.append("reasoning")
         st.warning(f"Please complete: {', '.join(missing)}")
 
-    is_last   = idx >= total - 1
-    btn_label = "Submit all responses ✓" if is_last else f"Next post → ({idx + 2} of {total})"
+    is_last = idx >= total - 1
+    btn_label = (
+        "Submit all responses ✓" if is_last else f"Next post → ({idx + 2} of {total})"
+    )
 
-    if st.button(btn_label, type="primary", disabled=not all_filled,
-                 use_container_width=True, key=f"btn_{idx}"):
+    if st.button(
+        btn_label,
+        type="primary",
+        disabled=not all_filled,
+        use_container_width=True,
+        key=f"btn_{idx}",
+    ):
         time_spent = time.time() - (st.session_state.post_start_time or time.time())
-        st.session_state.feedback_data.append({
-            "annotator_name":    st.session_state.annotator_name,
-            "post_id":           post.get("post_id") or post.get("uri") or post.get("cid") or str(idx),
-            "display_num":       (DISPLAY_NUM_OFFSET + idx + 1)
-                                 if st.session_state.get("survey_type") == "firehose"
-                                 else post.get("display_num", idx + 1),
-            "label":             label,
-            "unsafe_categories": ",".join(unsafe_labels) if unsafe_labels else "",
-            "reason":            reason.strip(),
-            "time_spent_sec":    round(time_spent, 1),
-            "attribution_source":"|".join(selected_attributions),
-            "survey_type":       st.session_state.get("survey_type", "main"),
-        })
+        st.session_state.feedback_data.append(
+            {
+                "annotator_name": st.session_state.annotator_name,
+                "post_id": post.get("post_id")
+                or post.get("uri")
+                or post.get("cid")
+                or str(idx),
+                "display_num": (
+                    (DISPLAY_NUM_OFFSET + idx + 1)
+                    if st.session_state.get("survey_type") == "firehose"
+                    else (
+                        (DISPLAY_NUM_OFFSET_PILOT + idx + 1)
+                        if st.session_state.get("survey_type") == "pilot_remaining"
+                        else (
+                            (DISPLAY_NUM_OFFSET_DISAGREE + idx + 1)
+                            if st.session_state.get("survey_type") == "pilot_disagree"
+                            else post.get("display_num", idx + 1)
+                        )
+                    )
+                ),
+                "label": label,
+                "unsafe_categories": ",".join(unsafe_labels) if unsafe_labels else "",
+                "reason": reason.strip(),
+                "time_spent_sec": round(time_spent, 1),
+                "attribution_source": "|".join(selected_attributions),
+                "survey_type": st.session_state.get("survey_type", "main"),
+            }
+        )
 
         if is_last:
             st.session_state.page = "submitting"
             st.rerun()
         else:
-            st.session_state.current_idx    += 1
+            st.session_state.current_idx += 1
             st.session_state.post_start_time = time.time()
-            st.session_state._do_autosave    = True
+            st.session_state._do_autosave = True
             st.rerun()
 
 
 def submitting_page():
     st.markdown("## Saving your responses...")
     progress_bar = st.progress(0)
-    status       = st.empty()
-    feedback     = st.session_state.feedback_data
-    saved_ids    = st.session_state.get("saved_post_ids", set())
-    pending      = [r for r in feedback if r["post_id"] not in saved_ids]
-    total        = len(pending)
-    failed       = []
+    status = st.empty()
+    feedback = st.session_state.feedback_data
+    saved_ids = st.session_state.get("saved_post_ids", set())
+    pending = [r for r in feedback if r["post_id"] not in saved_ids]
+    total = len(pending)
+    failed = []
 
     for i, row in enumerate(pending):
         status.text(f"Saving {i + 1} of {total}...")
@@ -766,25 +996,32 @@ def submitting_page():
             st.warning(f"Could not save post {row['post_id']}: {msg}")
         time.sleep(0.2)
 
-    st.session_state.saved_post_ids      = saved_ids
+    st.session_state.saved_post_ids = saved_ids
     st.session_state.submission_complete = len(failed) == 0
-    st.session_state.page                = "summary"
+    st.session_state.page = "summary"
     st.rerun()
 
 
 def summary_page():
-    st.markdown("""
+    st.markdown(
+        """
 <div style="text-align:center; padding:40px 0 24px;">
     <div style="font-size:3em; margin-bottom:12px;">🎉</div>
     <h1 style="color:#1e3a8a; margin:0; font-weight:700;">All done!</h1>
     <p style="color:#64748b; margin:8px 0 0;">Thank you for contributing to the Bluesky moderation study.</p>
 </div>
-""", unsafe_allow_html=True)
+""",
+        unsafe_allow_html=True,
+    )
 
     if st.session_state.submission_complete:
-        st.success(f"All {len(st.session_state.feedback_data)} responses saved successfully.")
+        st.success(
+            f"All {len(st.session_state.feedback_data)} responses saved successfully."
+        )
     else:
-        st.warning("Some responses may not have saved correctly. Please contact the research team.")
+        st.warning(
+            "Some responses may not have saved correctly. Please contact the research team."
+        )
 
     st.markdown("---")
     st.markdown(f"**Annotator:** {st.session_state.annotator_name}")
@@ -792,6 +1029,7 @@ def summary_page():
 
 
 # ── Router ─────────────────────────────────────────────────────────────────────
+
 
 def main():
     page = st.session_state.page
@@ -805,6 +1043,7 @@ def main():
         summary_page()
     else:
         intro_page()
+
 
 if __name__ == "__main__":
     main()
