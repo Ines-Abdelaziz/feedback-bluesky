@@ -657,7 +657,7 @@ def intro_page():
         "main": "📋 Main survey (3,000 posts — curated safe + unsafe)",
         "firehose": "🔥 Firehose survey (1,000 posts — random sample)",
         "pilot_remaining": "🧪 Pilot completion (remaining unlabeled pilot posts)",
-        "pilot_disagree": "⚖️ Pilot disagreements (tiebreaker — posts where Ines & adash disagreed)",
+        "pilot_disagree": "⚖️ Firehose still disagree (tiebreaker — posts where Ines & adash disagreed after discussion)",
         "automod": "🤖 AutoMod unflagged (posts Bluesky missed — verify if actually unsafe)",
     }
     survey_type = st.radio(
@@ -682,7 +682,7 @@ def intro_page():
 
     if survey_type == "pilot_disagree":
         st.info(
-            "⚖️ **Tiebreaker mode** — these are posts where Ines and adash disagreed. "
+            "⚖️ **Firehose tiebreaker** — these are the 10 firehose posts where Ines and adash still disagree after discussion. "
             "Each post shows what they each labeled. Your job is to cast the deciding vote."
         )
     if survey_type == "automod":

@@ -1,0 +1,19 @@
+Annotator,Bluesky label,n,Confirmed Unsafe,Labeled Safe,Precision
+Ines,graphic-media,33,26,7,0.788
+Ines,intolerant,37,20,17,0.541
+Ines,nudity,28,27,1,0.964
+Ines,porn,35,35,0,1.0
+Ines,rude,25,6,19,0.24
+Ines,self-harm,28,18,10,0.643
+Ines,sexual,24,19,5,0.792
+Ines,sexual-figurative,29,26,3,0.897
+Ines,threat,33,19,14,0.576
+adash,graphic-media,33,25,8,0.758
+adash,intolerant,37,31,6,0.838
+adash,nudity,28,27,1,0.964
+adash,porn,35,35,0,1.0
+adash,rude,25,17,8,0.68
+adash,self-harm,28,24,4,0.857
+adash,sexual,24,20,4,0.833
+adash,sexual-figurative,29,26,3,0.897
+adash,threat,33,24,9,0.727
