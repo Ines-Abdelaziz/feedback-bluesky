@@ -675,7 +675,7 @@ def intro_page():
         "main": "3,000",
         "firehose": "1,000",
         "pilot_remaining": "~728",
-        "pilot_disagree": "~10",
+        "pilot_disagree": "~50",
         "automod": "~1,000",
     }
     n_posts = n_posts_map.get(survey_type, "?")
@@ -795,6 +795,13 @@ def survey_page():
     posts = st.session_state.posts
     idx = st.session_state.current_idx
     total = len(posts)
+
+    # Guard: idx out of bounds means all posts are done
+    if idx >= total:
+        st.session_state.page = "submitting"
+        st.rerun()
+        return
+
     post = posts[idx]
 
     if st.session_state.resumed_from:
