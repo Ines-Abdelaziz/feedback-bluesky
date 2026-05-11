@@ -826,25 +826,6 @@ def survey_page():
     text = "" if raw_text.lower() in ("nan", "none", "") else raw_text
     media = get_post_media(post)
 
-    # Show prior labels for disagreement survey
-    if st.session_state.get("survey_type") == "pilot_disagree":
-        ines_label = post.get("ines_label", "?")
-        adash_label = post.get("adash_label", "?")
-        col1, col2 = st.columns(2)
-        with col1:
-            color = "#22c55e" if ines_label == "Safe" else "#ef4444"
-            st.markdown(
-                f'<div style="background:{color}22;border:1px solid {color};border-radius:8px;padding:8px 14px;font-size:13px;"><b>Ines labeled:</b> {ines_label}</div>',
-                unsafe_allow_html=True,
-            )
-        with col2:
-            color = "#22c55e" if adash_label == "Safe" else "#ef4444"
-            st.markdown(
-                f'<div style="background:{color}22;border:1px solid {color};border-radius:8px;padding:8px 14px;font-size:13px;"><b>adash labeled:</b> {adash_label}</div>',
-                unsafe_allow_html=True,
-            )
-        st.markdown("")
-
     badges = ""
     if media["has_image"]:
         badges += f'<span class="media-badge badge-image">🖼 {len(media["image_urls"])} image{"s" if len(media["image_urls"]) > 1 else ""}</span>'
