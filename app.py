@@ -675,7 +675,7 @@ def intro_page():
         "main": "3,000",
         "firehose": "1,000",
         "pilot_remaining": "~728",
-        "pilot_disagree": "~50",
+        "pilot_disagree": "~10",
         "automod": "~1,000",
     }
     n_posts = n_posts_map.get(survey_type, "?")
