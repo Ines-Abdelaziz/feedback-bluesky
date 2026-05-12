@@ -633,7 +633,7 @@ def autosave_pending(force: bool = False):
     if failed:
         st.toast(f"⚠️ Autosave failed for {len(failed)} posts.", icon="⚠️")
         return False
-    st.toast(f"💾 Progress saved ({len(saved_ids)}/3,000 posts)", icon="💾")
+    st.toast(f"💾 Progress saved ({len(saved_ids)} posts)", icon="💾")
     return True
 
 
@@ -654,11 +654,11 @@ def intro_page():
 
     st.markdown("### Select survey")
     SURVEY_LABELS = {
-        "main": "📋 Main survey (3,000 posts — curated safe + unsafe)",
-        "firehose": "🔥 Firehose survey (1,000 posts — random sample)",
+        "main": "📋 Remaining safe & unlabeled (1,472 posts)",
+        "firehose": "🔥 Firehose survey (1,000 posts — random sample) [disabled]",
         "pilot_remaining": "🧪 Pilot completion (remaining unlabeled pilot posts)",
-        "pilot_disagree": "⚖️ Firehose still disagree (tiebreaker — posts where Ines & adash disagreed after discussion)",
-        "automod": "🤖 AutoMod unflagged (posts Bluesky missed — verify if actually unsafe)",
+        "pilot_disagree": "⚖️ Pilot disagree (to be implemented — tiebreaker)",
+        "automod": "🤖 AutoMod unflagged [disabled]",
     }
     survey_type = st.radio(
         "Which dataset would you like to label?",
@@ -672,7 +672,7 @@ def intro_page():
     st.markdown("---")
     st.markdown("### About this study")
     n_posts_map = {
-        "main": "3,000",
+        "main": "1,472",
         "firehose": "1,000",
         "pilot_remaining": "~728",
         "pilot_disagree": "~50",
@@ -680,11 +680,18 @@ def intro_page():
     }
     n_posts = n_posts_map.get(survey_type, "?")
 
+    if survey_type in ("firehose", "automod"):
+        st.warning(
+            "⚠️ This survey is currently disabled. Please select another survey."
+        )
+        return
+
     if survey_type == "pilot_disagree":
         st.info(
-            "⚖️ **Firehose tiebreaker** — these are the 10 firehose posts where Ines and adash still disagree after discussion. "
-            "Each post shows what they each labeled. Your job is to cast the deciding vote."
+            "⚖️ **Pilot disagree** — to be implemented. Please select another survey."
         )
+        return
+
     if survey_type == "automod":
         st.info(
             "🤖 **AutoMod unflagged** — these posts were NOT flagged by Bluesky's automated "
@@ -738,9 +745,7 @@ strong language not targeting anyone, fictional violence in art/games, journalis
     resume = False
     if resume_available:
         completed = len(saved_rows)
-        st.info(
-            f"💾 Found saved progress: **{completed}/{n_posts} posts** already labeled."
-        )
+        st.info(f"💾 Found saved progress: **{completed} posts** already labeled.")
         resume = st.checkbox(f"Resume from post {completed + 1}", value=True)
 
     st.markdown("---")
