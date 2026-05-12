@@ -687,10 +687,7 @@ def intro_page():
         return
 
     if survey_type == "pilot_disagree":
-        st.info(
-            "⚖️ **Pilot disagree** — to be implemented. Please select another survey."
-        )
-        return
+        st.warning("⚠️ Data to be updated — survey content may change soon.")
 
     if survey_type == "automod":
         st.info(
