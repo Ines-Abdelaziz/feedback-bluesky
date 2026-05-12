@@ -167,10 +167,11 @@ HF_FIREHOSE_JSONL_URL = st.secrets.get("HF_FIREHOSE_JSONL_URL", "")
 HF_PILOT_REMAINING_URL = st.secrets.get("HF_PILOT_REMAINING_URL", "")
 HF_PILOT_DISAGREE_URL = st.secrets.get("HF_PILOT_DISAGREE_URL", "")
 HF_AUTOMOD_URL = st.secrets.get("HF_AUTOMOD_URL", "")
-DISPLAY_NUM_OFFSET_AUTOMOD = 40000  # automod: 40001, 40002, ...
-DISPLAY_NUM_OFFSET = 10000  # firehose
+DISPLAY_NUM_OFFSET = 10000  # firehose (disabled)
 DISPLAY_NUM_OFFSET_PILOT = 20000  # pilot_remaining
-DISPLAY_NUM_OFFSET_DISAGREE = 30000  # pilot_disagree
+DISPLAY_NUM_OFFSET_MAIN = 50000  # main remaining safe
+DISPLAY_NUM_OFFSET_DISAGREE = 60000  # pilot_disagree
+DISPLAY_NUM_OFFSET_AUTOMOD = 40000  # automod (disabled)
 
 AUTOSAVE_EVERY = 1
 
@@ -593,9 +594,7 @@ def fetch_saved_progress(annotator_name: str, survey_type: str = "main") -> list
                 return [
                     r
                     for r in all_rows
-                    if DISPLAY_NUM_OFFSET_DISAGREE
-                    <= int(r.get("display_num", 0))
-                    < DISPLAY_NUM_OFFSET_AUTOMOD
+                    if int(r.get("display_num", 0)) >= DISPLAY_NUM_OFFSET_DISAGREE
                 ]
             elif survey_type == "automod":
                 return [
@@ -603,11 +602,12 @@ def fetch_saved_progress(annotator_name: str, survey_type: str = "main") -> list
                     for r in all_rows
                     if int(r.get("display_num", 0)) >= DISPLAY_NUM_OFFSET_AUTOMOD
                 ]
-            else:  # main
+            else:  # main — use new offset 50000+
                 return [
                     r
                     for r in all_rows
-                    if int(r.get("display_num", 0)) < DISPLAY_NUM_OFFSET
+                    if int(r.get("display_num", 0)) >= DISPLAY_NUM_OFFSET_MAIN
+                    and int(r.get("display_num", 0)) < 60000
                 ]
     except Exception:
         pass
@@ -976,7 +976,11 @@ def survey_page():
                             else (
                                 (DISPLAY_NUM_OFFSET_AUTOMOD + idx + 1)
                                 if st.session_state.get("survey_type") == "automod"
-                                else post.get("display_num", idx + 1)
+                                else (
+                                    (DISPLAY_NUM_OFFSET_MAIN + idx + 1)
+                                    if st.session_state.get("survey_type") == "main"
+                                    else post.get("display_num", idx + 1)
+                                )
                             )
                         )
                     )
