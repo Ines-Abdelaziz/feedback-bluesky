@@ -235,7 +235,7 @@ for k, v in {
 # ── Data loading (cached) ──────────────────────────────────────────────────────
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=0)
 def load_posts_from_hf(url: str, token: str) -> list:
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
