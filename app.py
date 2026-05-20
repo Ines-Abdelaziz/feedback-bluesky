@@ -235,7 +235,7 @@ for k, v in {
 # ── Data loading (cached) ──────────────────────────────────────────────────────
 
 
-@st.cache_data(ttl=0)
+@st.cache_data(ttl=3600)
 def load_posts_from_hf(url: str, token: str) -> list:
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
@@ -652,48 +652,12 @@ def intro_page():
         unsafe_allow_html=True,
     )
 
-    st.markdown("### Select survey")
-    SURVEY_LABELS = {
-        "main": "📋 Remaining to label (736 safe + 700 automod neighbors = 1,436 posts)",
-        "firehose": "🔥 Firehose survey (1,000 posts — random sample) [disabled]",
-        "pilot_remaining": "🧪 Pilot completion (remaining unlabeled pilot posts)",
-        "pilot_disagree": "⚖️ Pilot disagree (to be implemented — tiebreaker)",
-        "automod": "🤖 AutoMod unflagged [disabled]",
-    }
-    survey_type = st.radio(
-        "Which dataset would you like to label?",
-        options=list(SURVEY_LABELS.keys()),
-        format_func=lambda x: SURVEY_LABELS[x],
-        horizontal=False,
-        key="survey_type_select",
-    )
+    survey_type = "main"
     st.session_state.survey_type = survey_type
+    n_posts = "1,436"
 
     st.markdown("---")
     st.markdown("### About this study")
-    n_posts_map = {
-        "main": "1,436",
-        "firehose": "1,000",
-        "pilot_remaining": "~728",
-        "pilot_disagree": "~50",
-        "automod": "~1,000",
-    }
-    n_posts = n_posts_map.get(survey_type, "?")
-
-    if survey_type == "firehose":
-        st.warning(
-            "⚠️ This survey is currently disabled. Please select another survey."
-        )
-        return
-
-    if survey_type == "pilot_disagree":
-        st.warning("⚠️ Data to be updated — survey content may change soon.")
-
-    if survey_type == "automod":
-        st.info(
-            "🤖 **AutoMod unflagged** — these posts were NOT flagged by Bluesky's automated "
-            "moderation but may still contain unsafe content. Label them as you normally would."
-        )
 
     st.markdown(f"""
 You will review **{n_posts} Bluesky posts** and label each one as **Safe** or **Unsafe**
