@@ -654,7 +654,7 @@ def intro_page():
 
     st.markdown("### Select survey")
     SURVEY_LABELS = {
-        "main": "📋 Remaining safe & unlabeled (1,472 posts)",
+        "main": "📋 Remaining to label (736 safe + 700 automod neighbors = 1,436 posts)",
         "firehose": "🔥 Firehose survey (1,000 posts — random sample) [disabled]",
         "pilot_remaining": "🧪 Pilot completion (remaining unlabeled pilot posts)",
         "pilot_disagree": "⚖️ Pilot disagree (to be implemented — tiebreaker)",
@@ -672,7 +672,7 @@ def intro_page():
     st.markdown("---")
     st.markdown("### About this study")
     n_posts_map = {
-        "main": "1,472",
+        "main": "1,436",
         "firehose": "1,000",
         "pilot_remaining": "~728",
         "pilot_disagree": "~50",
@@ -680,7 +680,7 @@ def intro_page():
     }
     n_posts = n_posts_map.get(survey_type, "?")
 
-    if survey_type in ("firehose", "automod"):
+    if survey_type == "firehose":
         st.warning(
             "⚠️ This survey is currently disabled. Please select another survey."
         )
@@ -1054,7 +1054,8 @@ def summary_page():
 
     st.markdown("---")
     st.markdown(f"**Annotator:** {st.session_state.annotator_name}")
-    st.markdown(f"**Posts labeled:** {len(st.session_state.feedback_data)}")
+    unique = len(set(r["post_id"] for r in st.session_state.feedback_data))
+    st.markdown(f"**Posts labeled:** {unique}")
 
 
 # ── Router ─────────────────────────────────────────────────────────────────────
