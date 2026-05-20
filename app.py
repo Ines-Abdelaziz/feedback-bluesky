@@ -167,11 +167,13 @@ HF_FIREHOSE_JSONL_URL = st.secrets.get("HF_FIREHOSE_JSONL_URL", "")
 HF_PILOT_REMAINING_URL = st.secrets.get("HF_PILOT_REMAINING_URL", "")
 HF_PILOT_DISAGREE_URL = st.secrets.get("HF_PILOT_DISAGREE_URL", "")
 HF_AUTOMOD_URL = st.secrets.get("HF_AUTOMOD_URL", "")
+HF_AUTOMOD_DISAGREE_URL = st.secrets.get("HF_AUTOMOD_DISAGREE_URL", "")
 DISPLAY_NUM_OFFSET = 10000  # firehose (disabled)
 DISPLAY_NUM_OFFSET_PILOT = 20000  # pilot_remaining
 DISPLAY_NUM_OFFSET_MAIN = 50000  # main remaining safe
 DISPLAY_NUM_OFFSET_DISAGREE = 60000  # pilot_disagree
-DISPLAY_NUM_OFFSET_AUTOMOD = 40000  # automod (disabled)
+DISPLAY_NUM_OFFSET_AUTOMOD = 40000  # automod
+DISPLAY_NUM_OFFSET_AUTOMOD_DISAGREE = 70000  # automod disagree
 
 AUTOSAVE_EVERY = 1
 
@@ -285,6 +287,14 @@ def load_posts(survey_type: str = "main") -> list:
             return posts
         st.error("HF_AUTOMOD_URL not set in secrets.")
         return []
+    if survey_type == "automod_disagree":
+        if HF_AUTOMOD_DISAGREE_URL:
+            posts = load_posts_from_hf(HF_AUTOMOD_DISAGREE_URL, HF_TOKEN)
+            for p in posts:
+                p["source"] = "automod_disagree"
+            return posts
+        st.error("HF_AUTOMOD_DISAGREE_URL not set in secrets.")
+        return []
     if HF_JSONL_URL:
         return load_posts_from_hf(HF_JSONL_URL, HF_TOKEN)
     try:
@@ -338,7 +348,10 @@ def shuffle_posts_for_annotator(posts, annotator_name):
         return final
 
     # ── Firehose / automod: simple batching ──────────────────────────────
-    if all(p.get("source", "") in ("firehose", "automod") for p in posts[:5]):
+    if all(
+        p.get("source", "") in ("firehose", "automod", "automod_disagree")
+        for p in posts[:5]
+    ):
         posts_sorted = sorted(posts, key=lambda p: p.get("uri", ""))
         rng_fixed = random.Random(FIXED_SEED)
         rng_fixed.shuffle(posts_sorted)
@@ -600,7 +613,16 @@ def fetch_saved_progress(annotator_name: str, survey_type: str = "main") -> list
                 return [
                     r
                     for r in all_rows
-                    if int(r.get("display_num", 0)) >= DISPLAY_NUM_OFFSET_AUTOMOD
+                    if DISPLAY_NUM_OFFSET_AUTOMOD
+                    <= int(r.get("display_num", 0))
+                    < DISPLAY_NUM_OFFSET_AUTOMOD_DISAGREE
+                ]
+            elif survey_type == "automod_disagree":
+                return [
+                    r
+                    for r in all_rows
+                    if int(r.get("display_num", 0))
+                    >= DISPLAY_NUM_OFFSET_AUTOMOD_DISAGREE
                 ]
             else:  # main — use new offset 50000+
                 return [
@@ -652,9 +674,25 @@ def intro_page():
         unsafe_allow_html=True,
     )
 
-    survey_type = "main"
+    st.markdown("### Select survey")
+    SURVEY_LABELS = {
+        "main": "📋 Remaining to label (736 safe + 700 automod neighbors = 1,436 posts)",
+        "automod_disagree": "⚖️ AutoMod disagreements (31 posts where Ines & adash disagreed)",
+    }
+    survey_type = st.radio(
+        "Which survey?",
+        options=list(SURVEY_LABELS.keys()),
+        format_func=lambda x: SURVEY_LABELS[x],
+        horizontal=False,
+        key="survey_type_select",
+    )
     st.session_state.survey_type = survey_type
-    n_posts = "1,436"
+    n_posts = "1,436" if survey_type == "main" else "31"
+
+    if survey_type == "automod_disagree":
+        st.warning(
+            "⚠️ Tiebreaker — 31 posts where Ines and adash disagreed on AutoMod labels."
+        )
 
     st.markdown("---")
     st.markdown("### About this study")
